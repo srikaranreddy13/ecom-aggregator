@@ -7,7 +7,7 @@ engineering around them was quietly broken in ways that would have wrecked the
 next phase — so we fixed the foundations, wrapped the system in a real API, and
 built the test suite that proves the fixes hold.
 
-**The numbers:** 11 tests → **145**. Price history: 30 rows over 2 days with zero
+**The numbers:** 11 tests → **165**. Price history: 30 rows over 2 days with zero
 price movement → **4,842 observations over 180 days** that actually move. Plus one
 of our published results turned out to be over-general, and we corrected it.
 
@@ -470,7 +470,7 @@ That CI assertion is the point: the bug from Part 1 is now something the
 
 ## Part 7 — The tests
 
-11 → 145, in 8 files.
+11 → 165, in 9 files.
 
 | File | Covers |
 |---|---|
@@ -482,6 +482,7 @@ That CI assertion is the point: the bug from Part 1 is now something the
 | `test_pipeline_integration.py` | caching, currency, failure policy end-to-end |
 | `test_ebay_adapter.py` | the previously-unexecuted live adapter |
 | `test_api.py` | HTTP contract and input validation |
+| `test_frontend.py` | static mount, no-CDN rule, the click-swallowing regression |
 
 Things worth pointing out about *how* they're written:
 
@@ -497,6 +498,56 @@ Things worth pointing out about *how* they're written:
 - **Some tests protect the premise, not the code.**
   `test_no_seller_wins_every_criterion` fails if anyone makes the test fixture
   degenerate. That's an unusual and useful kind of test.
+
+---
+
+## Part 8 — The live frontend, and a bug that endpoint tests could never catch
+
+`web/app/`. Four tabs, one per pipeline stage, served by the same process as the
+API so there is one thing to start.
+
+The design rule: **the browser does not rank anything.** Every score comes from
+`GET /search`, i.e. from `src/ranking/mcdm.py`. The old `dashboard.html`
+re-implemented TOPSIS in JavaScript — two implementations of one algorithm that
+could silently disagree, and the JavaScript one was what people actually looked
+at. There's a test (`test_frontend_does_not_reimplement_ranking`) that fails if
+ranking logic leaks back into the frontend.
+
+It also has **no CDN and no build step**, because the project has to run on a lab
+machine with no internet. A CDN `<script>` works on the dev laptop and fails
+silently in the room where it matters. That's asserted too.
+
+### The bug worth telling them about
+
+Every endpoint test passed. All routes returned 200. The page screenshotted
+perfectly. **And the app was completely unusable.**
+
+The modal dialog is hidden with the HTML `hidden` attribute. But the CSS had:
+
+```css
+.modal { position: fixed; inset: 0; display: grid; background: rgba(0,0,0,.65); }
+```
+
+A class selector beats the browser's built-in `[hidden] { display: none }`. So the
+"hidden" modal stayed laid out — a full-viewport fixed overlay sitting on top of
+everything, dimming the page and swallowing every single click.
+
+It was found by **driving the real browser**, where the first attempted click
+timed out with `<div hidden id="modal"> intercepts pointer events`. No API test
+could have found it — the API was perfect. The fix is one line:
+
+```css
+.modal[hidden] { display: none; }
+```
+
+> **The lesson, and it generalises past CSS:** a test that exercises the layer
+> below can pass completely while the thing the user touches is broken. "All the
+> endpoints return 200" is not "the app works." At some point you have to open
+> it, click it, and look.
+
+That's the same lesson as Part 1 in a different costume: the row count was going
+up, and the data was worthless. Watch the thing you actually care about, not the
+proxy that's easy to measure.
 
 ---
 

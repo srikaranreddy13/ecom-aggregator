@@ -58,7 +58,7 @@ re-run it if you open a new one. To make it permanent, copy `.env.example` to
 python -m pytest tests -q
 ```
 
-Expect **145 passed**. If you see 11, you are running an older copy.
+Expect **165 passed**. If you see 11, you are running an older copy.
 
 ### Step 4 — generate the price history
 
@@ -102,25 +102,40 @@ The first prints the entity-resolution ablation. The second prints the refined
 normalisation result — read its conclusion, it corrects an over-general claim
 from the earlier version of this project.
 
-### Step 7 — start the API
+### Step 7 — start the API and the frontend
 
 ```
 python -m scripts.serve
 ```
 
-Then open **http://127.0.0.1:8000/docs** for the interactive OpenAPI UI.
+One process serves both. Open **http://127.0.0.1:8000**.
 
-Try these directly in a browser:
+Four tabs, one per pipeline stage:
+
+1. **Search & Rank** — move a weight slider and watch the winner change. Click
+   the three preset buttons (Budget hunter / In a hurry / Trust first) to get
+   three different winners on the same query.
+2. **Entity Resolution** — type `sony` and hit Resolve. Both products are black
+   Sony headphones in the *same block*, split into two clusters by the
+   model-number constraint (`wh1000xm4` vs `wh1000xm5`).
+3. **Price History** — 180-day series per item, with sale-event dips visible.
+4. **System Health** — live diagnostics, including `flat_series`.
+
+Also useful:
 
 ```
-http://127.0.0.1:8000/health
+http://127.0.0.1:8000/docs       interactive API documentation
+http://127.0.0.1:8000/health     raw diagnostics
 http://127.0.0.1:8000/search?q=iphone&price=0.9&delivery_days=0.05&seller_rating=0.05
 http://127.0.0.1:8000/search?q=iphone&price=0.05&delivery_days=0.05&seller_rating=0.9
-http://127.0.0.1:8000/tracked-items?min_observations=100
 ```
 
-The last two use different weights on the same query and return **different
-winners**. That is the MCDM module working.
+Those last two are the same query with different weights, and they return
+**different winners** — the MCDM module, as raw JSON.
+
+> Demoing this to someone? **[DEMO_SCRIPT.md](DEMO_SCRIPT.md)** has the full
+> running order with what to say at each step and what to do when something
+> breaks.
 
 ### Step 8 — build the static dashboard (optional)
 

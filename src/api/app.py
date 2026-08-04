@@ -35,10 +35,17 @@ import time
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from ..adapters.errors import AdapterError
-from ..config import settings
+from ..config import ROOT, settings
 from ..logging_setup import configure_logging, get_logger
+from ..matching.resolver import (
+    extract_colour,
+    extract_generation,
+    extract_model_number,
+    extract_storage_gb,
+)
 from ..money import rate_table, rate_table_age_days
 from ..ranking.mcdm import DEFAULT_WEIGHTS
 from ..storage import db
@@ -224,23 +231,59 @@ def create_app() -> FastAPI:
         q: str = Query("", max_length=200),
         limit_per_source: int = Query(25, ge=1, le=200),
     ):
-        """Resolved clusters without ranking -- shows entity resolution alone."""
+        """Resolved clusters without ranking -- shows entity resolution alone.
+
+        Each offer carries the ATTRIBUTES the resolver extracted from its title
+        and the BLOCK KEY those attributes produced. That is what makes Stage 1
+        inspectable: two listings with different block keys can never merge, no
+        matter how similar their text, and here you can see exactly which
+        attribute separated them.
+        """
         pipe = resources.pipeline()
         listings = pipe.fetch(q, limit_per_source=limit_per_source)
         clusters = pipe.resolve(listings)
+
+        def describe(l):
+            d = l.to_dict()
+            d["attributes"] = {
+                "brand": (l.brand or "").lower() or None,
+                "storage_gb": extract_storage_gb(l.title),
+                "colour": extract_colour(l.title),
+                "model_number": extract_model_number(l.title),
+                "generation": extract_generation(l.title),
+            }
+            # Only brand, storage and colour form the block key. Model number and
+            # generation act as must-not-link constraints *inside* a block --
+            # a different mechanism, so they are reported separately.
+            d["block_key"] = "|".join(
+                str(d["attributes"][k] if d["attributes"][k] is not None else "-")
+                for k in ("brand", "storage_gb", "colour")
+            )
+            return d
+
         return {
             "query": q,
             "listings": len(listings),
             "clusters": len(clusters),
             "diagnostics": pipe.stats,
+            "resolver": {
+                "backend": pipe.resolver.embedder.backend,
+                "similarity_threshold": pipe.resolver.similarity_threshold,
+                "blocking_enabled": pipe.resolver.use_blocking,
+                "model_constraint_enabled": pipe.resolver.enforce_model_constraint,
+                "block_key_fields": ["brand", "storage_gb", "colour"],
+                "must_not_link_fields": ["model_number", "generation"],
+            },
             "products": [
                 {
                     "cluster_id": c.cluster_id,
                     "canonical_title": c.canonical_title,
                     "num_offers": len(c),
                     "min_price": c.min_price,
+                    "max_price": max(l.price for l in c.listings),
                     "sources": sorted({l.source for l in c.listings}),
-                    "offers": [l.to_dict() for l in c.listings],
+                    "offers": [describe(l) for l in
+                               sorted(c.listings, key=lambda x: x.price)],
                 }
                 for c in clusters
             ],
@@ -302,6 +345,21 @@ def create_app() -> FastAPI:
             )
             for r in rows
         ]
+
+    # ---------------------------------------------------------- frontend
+    # Mounted LAST, at "/", so it cannot shadow an API route: Starlette matches
+    # routes in registration order, and a mount at "/" would otherwise swallow
+    # every path registered after it.
+    #
+    # html=True makes the mount serve index.html for "/" and return 404 (not a
+    # directory listing) for anything missing.
+    ui_dir = ROOT / "web" / "app"
+    if ui_dir.is_dir():
+        app.mount("/", StaticFiles(directory=str(ui_dir), html=True), name="ui")
+        log.info("frontend mounted", extra={"path": str(ui_dir)})
+    else:
+        log.warning("frontend directory not found, API-only mode",
+                    extra={"expected": str(ui_dir)})
 
     return app
 

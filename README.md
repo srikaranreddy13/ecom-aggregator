@@ -9,10 +9,33 @@ multi-criteria (TOPSIS) ranking, served over an HTTP API.
 Recommendation and price forecasting are not built yet — but the data
 infrastructure they need now exists and works.
 
-> **Explaining this project to someone?** Read **[PROJECT_NOTES.md](PROJECT_NOTES.md)**.
-> It walks through what was broken, why each bug mattered, and the reasoning
-> behind each fix — in narrative order, with the questions you will be asked and
-> a demo running order. This README is the reference; those notes are the story.
+> **Explaining this project to someone?** Read **[PROJECT_NOTES.md](PROJECT_NOTES.md)**
+> for the narrative — what was broken, why it mattered, the reasoning behind each
+> fix. **[DEMO_SCRIPT.md](DEMO_SCRIPT.md)** is the command-by-command walkthrough
+> with what to say and what to do when something breaks. This README is the
+> reference.
+
+## See it working
+
+```bash
+pip install -r requirements.txt
+set EMBEDDER_BACKEND=tfidf                      # PowerShell: $env:EMBEDDER_BACKEND="tfidf"
+python -m scripts.backfill_prices --days 180    # generate price history
+python -m scripts.serve                         # -> http://127.0.0.1:8000
+```
+
+One process serves the API *and* the frontend. Four tabs, each mapping to a
+pipeline stage:
+
+| Tab | Shows |
+|---|---|
+| **1 · Search & Rank** | live TOPSIS. Move a slider → the winner changes |
+| **2 · Entity Resolution** | extracted attributes, block keys, why XM4 ≠ XM5 |
+| **3 · Price History** | 180-day series per item, inline SVG chart |
+| **4 · System Health** | live diagnostics, including `flat_series` |
+
+The browser does **not** rank anything — every score comes from
+`src/ranking/mcdm.py` via `GET /search`. No CDN, no build step, works offline.
 
 ---
 
@@ -27,7 +50,7 @@ Anything else:
 pip install -r requirements.txt
 export EMBEDDER_BACKEND=tfidf              # Windows: set EMBEDDER_BACKEND=tfidf
 
-python -m pytest tests -q                  # 145 tests
+python -m pytest tests -q                  # 165 tests
 python -m scripts.backfill_prices --days 180   # generate price history
 python -m scripts.demo                     # terminal walkthrough
 python -m scripts.serve                    # start the API -> localhost:8000/docs
@@ -76,7 +99,8 @@ listing came from an API, a simulator, or a cache.
 | Storage + price history | `src/storage/db.py` | Working |
 | Configuration | `src/config.py` | Working |
 | HTTP API | `src/api/` | Working |
-| Showcase dashboard | `web/`, `scripts/build_dashboard.py` | Working (static snapshot) |
+| **Live frontend** | `web/app/` | **Working** |
+| Static snapshot dashboard | `web/template.html`, `scripts/build_dashboard.py` | Working (legacy) |
 | **Recommender (hybrid CF)** | — | **Not started** |
 | **Price forecasting** | — | **Not started** (data now available) |
 
@@ -97,10 +121,11 @@ python -m scripts.serve
 | `GET /config` | effective configuration, secrets redacted |
 | `GET /search?q=iphone&price=0.9` | ranked offers under a weight vector |
 | `POST /search` | same, JSON body |
-| `GET /products` | resolved clusters without ranking |
+| `GET /products` | resolved clusters + **extracted attributes and block keys** |
 | `GET /price-history/{source}/{id}` | one item's observed series |
 | `GET /tracked-items` | everything with enough history to model |
 | `GET /docs` | generated OpenAPI UI |
+| `GET /` | the frontend |
 
 Ranking runs server-side, so the API and the paper cannot disagree about what
 TOPSIS returns. Every search response carries a `diagnostics` block with
@@ -337,11 +362,12 @@ Read this before the review — your supervisor will ask.
    than inventing synthetic users.
 6. **No price forecasting yet** — but no longer blocked. 180 days × 28 items of
    varying, autocorrelated series are available now.
-7. **The dashboard is still a static snapshot.** `dashboard.html` re-implements
-   TOPSIS in JavaScript. It should call `GET /search` instead, so there is one
-   implementation of the ranking rather than two.
-8. **No remote yet.** The repo exists locally but has never been pushed, so
+7. **No remote yet.** The repo exists locally but has never been pushed, so
    there is no off-machine backup. Create a private GitHub repo and push.
+8. **The legacy `dashboard.html` still re-implements TOPSIS in JavaScript.** The
+   live frontend at `web/app/` calls `GET /search` and does not, so the ranking
+   has one implementation there. The old static page is kept only because it
+   needs no server; delete it once nobody depends on that.
 
 ---
 
@@ -394,6 +420,7 @@ src/matching/            embedder.py  resolver.py
 src/ranking/             mcdm.py
 src/storage/             db.py  (cache + price history + migrations)
 src/api/                 app.py  schemas.py  deps.py
+web/app/                 index.html  style.css  app.js   <- the live frontend
 
 scripts/serve.py                 start the API
 scripts/demo.py                  terminal walkthrough
@@ -404,11 +431,12 @@ scripts/analyse_normalisation.py the refined Result 2
 scripts/build_dashboard.py       static dashboard
 scripts/update_fx_rates.py       refresh the FX snapshot
 
-tests/                   145 tests across 8 files
+tests/                   165 tests across 9 files
 data/                    sample_listings.json  fx_rates.json  aggregator.db
 Dockerfile  docker-compose.yml  .github/workflows/ci.yml  .env.example
 
 README.md                reference: what exists, results, limitations
 PROJECT_NOTES.md         narrative: what was broken and why each fix matters
+DEMO_SCRIPT.md           command-by-command demo, with what to say
 QUICKSTART.md            step-by-step commands and troubleshooting
 ```

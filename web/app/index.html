@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E-Commerce Aggregator — live</title>
+<!--
+  Live frontend. Every number on this page comes from the API at runtime.
+
+  WHY THIS EXISTS. The old dashboard.html was a static snapshot that
+  re-implemented TOPSIS in JavaScript -- two implementations of one algorithm,
+  which can disagree. This page calls GET /search instead, so the ranking you
+  see is the ranking the Python code produced. There is one implementation.
+
+  No CDN, no build step, no framework. Everything is inline or local, because
+  the project has to run on a lab machine with no internet.
+-->
+<link rel="stylesheet" href="style.css">
+<!-- Inline data-URI favicon. A separate .ico file would 404 on every page load
+     and put a spurious error in the console during a demo. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f3a63'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='%234c8dff'%3E%E2%97%88%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">◈</span>
+    <div>
+      <h1>E-Commerce Aggregator</h1>
+      <p class="sub">Semantic entity resolution + multi-criteria ranking</p>
+    </div>
+  </div>
+  <div class="status" id="statusChip" title="Loading system status…">
+    <span class="dot"></span><span id="statusText">connecting…</span>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab active" data-view="search"  role="tab">1 · Search &amp; Rank</button>
+  <button class="tab"        data-view="resolve" role="tab">2 · Entity Resolution</button>
+  <button class="tab"        data-view="prices"  role="tab">3 · Price History</button>
+  <button class="tab"        data-view="system"  role="tab">4 · System Health</button>
+</nav>
+
+<main>
+
+<!-- ============================================================ SEARCH -->
+<section class="view active" id="view-search">
+
+  <div class="explainer">
+    <strong>What this shows.</strong> One query hits every marketplace, duplicate
+    listings collapse into single products, and the offers inside each product are
+    ranked by <em>your</em> priorities. Move a slider and the winner changes —
+    that is the whole argument: there is no single &ldquo;best&rdquo; offer.
+  </div>
+
+  <div class="searchbar">
+    <input type="search" id="q" placeholder="Try: iphone · samsung · sony · airpods · (or leave empty for everything)"
+           autocomplete="off" spellcheck="false">
+    <button id="searchBtn" class="primary">Search</button>
+  </div>
+
+  <div class="controls">
+    <div class="panel weights">
+      <div class="panel-head">
+        <h2>Your priorities</h2>
+        <span class="hint">weights are normalised, so only the ratio matters</span>
+      </div>
+
+      <div class="presets">
+        <button class="preset" data-w="0.80,0.10,0.10">💰 Budget hunter</button>
+        <button class="preset" data-w="0.20,0.65,0.15">⚡ In a hurry</button>
+        <button class="preset" data-w="0.20,0.15,0.65">🛡️ Trust first</button>
+        <button class="preset" data-w="0.50,0.25,0.25">⚖️ Balanced</button>
+      </div>
+
+      <label class="slider-row">
+        <span class="slider-label">Low price</span>
+        <input type="range" id="w-price" min="0" max="1" step="0.05" value="0.5">
+        <output id="out-price">0.50</output>
+      </label>
+      <label class="slider-row">
+        <span class="slider-label">Fast delivery</span>
+        <input type="range" id="w-delivery" min="0" max="1" step="0.05" value="0.25">
+        <output id="out-delivery">0.25</output>
+      </label>
+      <label class="slider-row">
+        <span class="slider-label">Seller rating</span>
+        <input type="range" id="w-rating" min="0" max="1" step="0.05" value="0.25">
+        <output id="out-rating">0.25</output>
+      </label>
+
+      <div class="norm-toggle">
+        <div class="norm-head">
+          Normalisation
+          <button class="info" id="normInfo" title="Why this matters">?</button>
+        </div>
+        <div class="segmented">
+          <button class="seg active" data-norm="minmax">Min-max (ours)</button>
+          <button class="seg" data-norm="vector">Vector (textbook)</button>
+        </div>
+        <p class="norm-note" id="normNote">
+          Min-max rescales every criterion to the same span, so your weights
+          control the outcome.
+        </p>
+      </div>
+    </div>
+
+    <div class="panel stats" id="queryStats">
+      <div class="panel-head"><h2>This query</h2></div>
+      <div class="statgrid" id="statGrid"></div>
+      <div class="pipeline" id="pipelineViz"></div>
+    </div>
+  </div>
+
+  <div id="results" class="results"></div>
+</section>
+
+<!-- ========================================================== RESOLVE -->
+<section class="view" id="view-resolve">
+
+  <div class="explainer">
+    <strong>The hard part of this project.</strong> &ldquo;iPhone 15 128GB Blue&rdquo;
+    and &ldquo;iPhone 15 <em>256GB</em> Blue&rdquo; are about 97% similar as text
+    but are <em>different products</em>. Embeddings capture topic, not
+    specification — so hard attributes are enforced as <em>constraints</em>,
+    never learned.
+    <br><br>
+    <strong>Stage 1 — blocking:</strong> attributes are extracted from each title
+    with rules. Listings whose <code>brand · storage · colour</code> disagree land
+    in different blocks and can <em>never</em> merge.
+    <strong>Stage 2 — semantic clustering:</strong> inside each block, titles are
+    embedded and clustered by cosine similarity. Model number and generation act
+    as extra must-not-link constraints.
+  </div>
+
+  <div class="searchbar">
+    <input type="search" id="rq" placeholder="Filter listings (empty = whole catalogue)"
+           autocomplete="off" spellcheck="false">
+    <button id="resolveBtn" class="primary">Resolve</button>
+  </div>
+
+  <div class="resolve-summary" id="resolveSummary"></div>
+  <div id="blocks" class="blocks"></div>
+</section>
+
+<!-- =========================================================== PRICES -->
+<section class="view" id="view-prices">
+
+  <div class="explainer">
+    <strong>Why this matters.</strong> Forecasting needs price <em>history</em>,
+    and you cannot scrape the past. An earlier version of the collector recorded a
+    static file every day and produced a perfectly flat line — the row count grew
+    and the data looked healthy while being worthless. Every series below has real
+    day-to-day movement, and <code>flat_series</code> on the health tab is the
+    guard that stops that bug ever hiding again.
+  </div>
+
+  <div class="price-layout">
+    <aside class="panel item-list">
+      <div class="panel-head">
+        <h2>Tracked items</h2>
+        <span class="hint" id="itemCount"></span>
+      </div>
+      <div id="itemList"></div>
+    </aside>
+    <div class="panel chart-panel">
+      <div class="panel-head">
+        <h2 id="chartTitle">Select an item</h2>
+        <span class="hint" id="chartMeta"></span>
+      </div>
+      <div id="chart"></div>
+      <div id="chartStats" class="chart-stats"></div>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================== SYSTEM -->
+<section class="view" id="view-system">
+
+  <div class="explainer">
+    <strong>Health checks that report data quality, not just liveness.</strong>
+    Most health endpoints answer &ldquo;is the process running?&rdquo; — which is
+    nearly useless, because the process was running fine the entire time the price
+    history was garbage. This one reports the failures this system can actually
+    have.
+    <br><br>
+    <code>status: degraded</code> is <strong>expected</strong> without live API
+    credentials. It is not a malfunction — it is the system refusing to pretend
+    simulated data is real.
+  </div>
+
+  <div class="system-grid" id="systemGrid"></div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>Raw /health response</h2>
+      <span class="hint">this is exactly what the API returned</span></div>
+    <pre id="healthRaw" class="code"></pre>
+  </div>
+</section>
+
+</main>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-box">
+    <button class="modal-close" id="modalClose">×</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<footer>
+  <span id="footerInfo">—</span>
+  <span class="spacer"></span>
+  <a href="/docs" target="_blank" rel="noopener">API docs ↗</a>
+  <a href="/health" target="_blank" rel="noopener">/health ↗</a>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
