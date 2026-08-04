@@ -427,6 +427,8 @@ http://127.0.0.1:8000/health     diagnostics
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| `'export' is not recognized` | `export` is bash; you are in cmd.exe | `set EMBEDDER_BACKEND=tfidf` |
+| `set` seems to do nothing in PowerShell | `set` is cmd.exe syntax | `$env:EMBEDDER_BACKEND="tfidf"` |
 | `No module named 'scripts'` | wrong folder | `dir` — you must see `src`, `scripts`, `tests`. `cd` into the folder that has them |
 | `No module named 'fastapi'` | API extras missing | `python -m pip install fastapi uvicorn pydantic httpx` |
 | `No module named 'numpy'` | core deps missing | `python -m pip install -r requirements.txt` |

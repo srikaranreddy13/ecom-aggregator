@@ -17,12 +17,35 @@ infrastructure they need now exists and works.
 
 ## See it working
 
-```bash
+**Windows (cmd.exe):**
+
+```bat
 pip install -r requirements.txt
-set EMBEDDER_BACKEND=tfidf                      # PowerShell: $env:EMBEDDER_BACKEND="tfidf"
-python -m scripts.backfill_prices --days 180    # generate price history
-python -m scripts.serve                         # -> http://127.0.0.1:8000
+set EMBEDDER_BACKEND=tfidf
+python -m scripts.backfill_prices --days 180
+python -m scripts.serve
 ```
+
+Then open **http://127.0.0.1:8000**.
+
+<details>
+<summary>Same thing in PowerShell / macOS / Linux</summary>
+
+The only line that differs is the environment variable. `set` is cmd.exe syntax,
+`$env:` is PowerShell, `export` is bash — using the wrong one gives you
+`'export' is not recognized` or `'set' is not recognized`.
+
+```powershell
+# PowerShell
+$env:EMBEDDER_BACKEND = "tfidf"
+```
+
+```bash
+# macOS / Linux
+export EMBEDDER_BACKEND=tfidf
+```
+
+</details>
 
 One process serves the API *and* the frontend. Four tabs, each mapping to a
 pipeline stage:
@@ -44,19 +67,21 @@ The browser does **not** rank anything — every score comes from
 Windows: double-click **`run.bat`** — installs, tests, generates price history,
 runs the demo and evaluations, builds the dashboard, opens it.
 
-Anything else:
+Everything individually (set `EMBEDDER_BACKEND` first, see above):
 
-```bash
-pip install -r requirements.txt
-export EMBEDDER_BACKEND=tfidf              # Windows: set EMBEDDER_BACKEND=tfidf
-
-python -m pytest tests -q                  # 165 tests
-python -m scripts.backfill_prices --days 180   # generate price history
-python -m scripts.demo                     # terminal walkthrough
-python -m scripts.serve                    # start the API -> localhost:8000/docs
+```
+python -m pytest tests -q                        165 tests
+python -m scripts.backfill_prices --days 180     generate price history
+python -m scripts.serve                          API + frontend -> :8000
+python -m scripts.demo                           terminal walkthrough
+python -m scripts.evaluate_matching              entity-resolution ablation
+python -m scripts.analyse_normalisation          the corrected Result 2
+python -m scripts.collect_prices                 daily snapshot (schedule this)
+python -m scripts.build_dashboard                legacy static page
 ```
 
 Step-by-step commands and troubleshooting: **QUICKSTART.md**
+Demoing it to someone: **DEMO_SCRIPT.md**
 
 ---
 
