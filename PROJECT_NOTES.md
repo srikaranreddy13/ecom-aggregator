@@ -561,8 +561,7 @@ distributed for whatever product the user searched for. We implement both — pa
 - no forecasting model yet (but no longer blocked — the data exists)
 - all price data is synthetic
 - the dashboard still reimplements TOPSIS in JavaScript
-- **the project is not under version control** — git isn't installed on the dev
-  machine. This is the single most urgent thing to fix.
+- the repo has no remote yet — it lives on one laptop, which is not a backup
 
 ---
 

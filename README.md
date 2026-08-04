@@ -340,8 +340,8 @@ Read this before the review — your supervisor will ask.
 7. **The dashboard is still a static snapshot.** `dashboard.html` re-implements
    TOPSIS in JavaScript. It should call `GET /search` instead, so there is one
    implementation of the ranking rather than two.
-8. **Version control is not set up.** `git` is not installed on this machine.
-   Install it and commit — this is a large codebase with no history.
+8. **No remote yet.** The repo exists locally but has never been pushed, so
+   there is no off-machine backup. Create a private GitHub repo and push.
 
 ---
 
@@ -349,7 +349,8 @@ Read this before the review — your supervisor will ask.
 
 In dependency order.
 
-1. **`git init` and commit.** Nothing else is safe until this exists.
+1. **Push to a remote.** The repo is initialised and committed, but a repo that
+   exists only on one laptop is not a backup.
 2. **Expand the labelled dataset** to 500–1000 pairs. Write
    `scripts/label_pairs.py`: blocking-based candidate generation plus a terminal
    labelling UI. Then re-run the ablation with bootstrap confidence intervals,
