@@ -1,0 +1,107 @@
+name: CI
+
+# Runs the suite on every push and PR. The point is that a regression is caught
+# by the repo rather than by you, the day before a review.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 is the floor (the code uses `X | None` syntax throughout);
+        # 3.12 is what the container ships.
+        python-version: ["3.11", "3.12"]
+
+    env:
+      # Never download a model in CI -- it is slow and it makes the run depend
+      # on a third-party host being up.
+      EMBEDDER_BACKEND: tfidf
+      LOG_LEVEL: WARNING
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # sentence-transformers is excluded on purpose: ~2GB of PyTorch for a
+          # code path CI does not exercise. The TF-IDF fallback covers it.
+          grep -v '^sentence-transformers' requirements.txt > ci-requirements.txt
+          pip install -r ci-requirements.txt
+
+      - name: Run tests
+        run: python -m pytest tests -v --tb=short
+
+      - name: Verify the synthetic history is not flat
+        # Guards the specific bug this project already shipped once: a price
+        # history that looks populated but has zero variance.
+        run: |
+          python -m scripts.backfill_prices --days 60
+          python - <<'PY'
+          from src.storage import db
+          stats = db.series_stats(db.connect())
+          print(stats)
+          assert stats["observations"] > 0, "no observations were written"
+          assert stats["distinct_days"] >= 60, \
+              f"expected >=60 distinct days, got {stats['distinct_days']}"
+          assert stats["flat_series"] == 0, \
+              f"{stats['flat_series']} series have zero price variance"
+          PY
+
+      - name: Verify the evaluation scripts still run
+        run: |
+          python -m scripts.evaluate_matching
+          python -m scripts.analyse_normalisation
+
+      - name: Verify the dashboard builds
+        run: |
+          python -m scripts.build_dashboard
+          test -s dashboard.html
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      # Non-blocking: this project has no established lint baseline, so failing
+      # the build on style would just teach everyone to ignore CI.
+      - run: ruff check src tests scripts --output-format=github
+        continue-on-error: true
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t ecom-aggregator:ci .
+      - name: Boot it and check /health
+        run: |
+          docker run -d --name api -p 8000:8000 \
+            -e EMBEDDER_BACKEND=tfidf ecom-aggregator:ci
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health > /dev/null; then
+              echo "API is up after ${i}s"
+              curl -s http://localhost:8000/health
+              docker rm -f api
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API did not become healthy in 30s"
+          docker logs api
+          docker rm -f api
+          exit 1

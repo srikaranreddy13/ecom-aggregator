@@ -1,0 +1,63 @@
+# Local stack: the API plus a scheduled price collector.
+#
+#   docker compose up --build          start the API on :8000
+#   docker compose run --rm backfill   generate 180 days of history
+#   docker compose --profile cron up   also run the daily collector
+#
+# The database lives in a named volume, so `docker compose down` does not
+# destroy your price history. Use `down -v` only when you mean to.
+
+services:
+  api:
+    build:
+      context: .
+      args:
+        WITH_TRANSFORMERS: "0"    # set to "1" for the transformer backend (+2GB)
+    ports:
+      - "8000:8000"
+    environment:
+      EMBEDDER_BACKEND: tfidf
+      LOG_FORMAT: json
+      LOG_LEVEL: INFO
+      BASE_CURRENCY: INR
+      DB_PATH: /app/data/aggregator.db
+      # Uncomment to use live eBay data instead of the synthetic market.
+      # EBAY_CLIENT_ID: ${EBAY_CLIENT_ID}
+      # EBAY_CLIENT_SECRET: ${EBAY_CLIENT_SECRET}
+    volumes:
+      - pricedata:/app/data
+    restart: unless-stopped
+
+  # One-shot: populate a price history so the API has something to serve.
+  backfill:
+    build:
+      context: .
+    command: ["python", "-m", "scripts.backfill_prices", "--days", "180"]
+    environment:
+      EMBEDDER_BACKEND: tfidf
+      DB_PATH: /app/data/aggregator.db
+    volumes:
+      - pricedata:/app/data
+
+  # Daily snapshot. In production this belongs in a real scheduler; the sleep
+  # loop is deliberately simple because a cron sidecar is not the interesting
+  # part of this project.
+  collector:
+    build:
+      context: .
+    profiles: ["cron"]
+    command: >
+      sh -c "while true; do
+               python -m scripts.collect_prices;
+               sleep 86400;
+             done"
+    environment:
+      EMBEDDER_BACKEND: tfidf
+      LOG_FORMAT: json
+      DB_PATH: /app/data/aggregator.db
+    volumes:
+      - pricedata:/app/data
+    restart: unless-stopped
+
+volumes:
+  pricedata:

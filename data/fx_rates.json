@@ -1,0 +1,17 @@
+{
+  "_comment": "Static FX snapshot. Units of each currency per 1 USD. Refresh with `python -m scripts.update_fx_rates`. Kept static on purpose so a ranking is reproducible -- see src/money.py for the rationale.",
+  "as_of": "2026-08-01",
+  "base": "USD",
+  "source": "manual snapshot",
+  "rates": {
+    "USD": 1.0,
+    "INR": 87.5,
+    "EUR": 0.92,
+    "GBP": 0.78,
+    "AUD": 1.52,
+    "CAD": 1.37,
+    "JPY": 152.0,
+    "SGD": 1.34,
+    "AED": 3.67
+  }
+}

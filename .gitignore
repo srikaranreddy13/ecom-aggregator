@@ -1,0 +1,35 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Secrets -- .env.example IS committed, .env is not
+.env
+
+# Local data. aggregator.db is regenerable:
+#   python -m scripts.backfill_prices --days 180
+# If you ever collect REAL price history, back it up before deleting -- you
+# cannot scrape the past.
+data/aggregator.db
+data/aggregator.db-journal
+logs/
+
+# Generated artefacts
+dashboard.html
+
+# Editors / OS
+# .claude/settings.json is shared config and IS committed;
+# settings.local.json holds per-machine tool permissions and is not.
+.claude/settings.local.json
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

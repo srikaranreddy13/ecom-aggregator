@@ -1,0 +1,22 @@
+[
+  {"source":"alpha","source_item_id":"A101","title":"Apple iPhone 15 (128GB, Blue)","price":66999,"delivery_days":2,"seller_rating":4.6,"seller_name":"AlphaRetail","brand":"Apple","gold_cluster":"iphone15-128-blue"},
+  {"source":"beta","source_item_id":"B774","title":"APPLE iPhone 15 128 GB Blue Smartphone","price":64499,"delivery_days":5,"seller_rating":4.1,"seller_name":"BetaBazaar","brand":"Apple","gold_cluster":"iphone15-128-blue"},
+  {"source":"gamma","source_item_id":"G23","title":"iPhone 15 - 128GB - Blue (Unlocked)","price":65750,"delivery_days":3,"seller_rating":4.8,"seller_name":"GammaMobiles","brand":"Apple","gold_cluster":"iphone15-128-blue"},
+
+  {"source":"alpha","source_item_id":"A102","title":"Apple iPhone 15 (256GB, Blue)","price":76999,"delivery_days":2,"seller_rating":4.6,"seller_name":"AlphaRetail","brand":"Apple","gold_cluster":"iphone15-256-blue"},
+  {"source":"beta","source_item_id":"B775","title":"Apple iPhone 15 256GB Blue","price":75200,"delivery_days":6,"seller_rating":3.9,"seller_name":"ValueCell","brand":"Apple","gold_cluster":"iphone15-256-blue"},
+
+  {"source":"alpha","source_item_id":"A203","title":"Samsung Galaxy S24 5G (Onyx Black, 256 GB)","price":74999,"delivery_days":3,"seller_rating":4.5,"seller_name":"AlphaRetail","brand":"Samsung","gold_cluster":"s24-256-black"},
+  {"source":"beta","source_item_id":"B880","title":"SAMSUNG Galaxy S24 256GB Onyx Black Dual SIM","price":72300,"delivery_days":7,"seller_rating":4.0,"seller_name":"MobileMart","brand":"Samsung","gold_cluster":"s24-256-black"},
+  {"source":"gamma","source_item_id":"G55","title":"Galaxy S24 5G 256 GB Black Samsung","price":73450,"delivery_days":4,"seller_rating":4.4,"seller_name":"GammaMobiles","brand":"Samsung","gold_cluster":"s24-256-black"},
+
+  {"source":"alpha","source_item_id":"A301","title":"Sony WH-1000XM5 Wireless Noise Cancelling Headphones, Black","price":26990,"delivery_days":2,"seller_rating":4.7,"seller_name":"AlphaRetail","brand":"Sony","gold_cluster":"sony-xm5-black"},
+  {"source":"beta","source_item_id":"B901","title":"Sony WH1000XM5 Bluetooth Headphone Black Noise Cancellation","price":24999,"delivery_days":8,"seller_rating":3.6,"seller_name":"AudioHub","brand":"Sony","gold_cluster":"sony-xm5-black"},
+  {"source":"gamma","source_item_id":"G77","title":"Sony WH-1000XM4 Wireless Headphones Black","price":19990,"delivery_days":3,"seller_rating":4.5,"seller_name":"GammaAudio","brand":"Sony","gold_cluster":"sony-xm4-black"},
+
+  {"source":"alpha","source_item_id":"A404","title":"OnePlus Nord CE 4 Lite 5G (Super Silver, 128GB)","price":19999,"delivery_days":2,"seller_rating":4.3,"seller_name":"AlphaRetail","brand":"OnePlus","gold_cluster":"nord-ce4-lite-128"},
+  {"source":"beta","source_item_id":"B912","title":"OnePlus Nord CE4 Lite 5G 128 GB Super Silver","price":18499,"delivery_days":5,"seller_rating":4.2,"seller_name":"BetaBazaar","brand":"OnePlus","gold_cluster":"nord-ce4-lite-128"},
+
+  {"source":"gamma","source_item_id":"G88","title":"Apple AirPods Pro (2nd Generation) with MagSafe Case USB-C","price":21900,"delivery_days":3,"seller_rating":4.9,"seller_name":"GammaMobiles","brand":"Apple","gold_cluster":"airpods-pro-2"},
+  {"source":"beta","source_item_id":"B933","title":"AirPods Pro 2nd Gen USB C MagSafe Charging Case Apple","price":20750,"delivery_days":6,"seller_rating":4.1,"seller_name":"iZone","brand":"Apple","gold_cluster":"airpods-pro-2"}
+]

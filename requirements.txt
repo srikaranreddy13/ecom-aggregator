@@ -1,0 +1,23 @@
+# ---------------------------------------------------------------- core
+# The pipeline (adapters, matching, ranking, storage) needs only these.
+numpy>=1.24
+scikit-learn>=1.3
+requests>=2.31
+
+# ---------------------------------------------------------------- api
+# Needed for `python -m scripts.serve` / the HTTP service.
+# The core pipeline and all scripts work without these installed.
+fastapi>=0.110
+uvicorn>=0.27
+pydantic>=2.6
+
+# ---------------------------------------------------------------- optional
+# Real semantic embeddings. Without this the system falls back to TF-IDF
+# automatically and everything still runs -- see src/matching/embedder.py.
+# PyTorch has no wheels for Python 3.14 yet; if this fails to install, that is
+# why, and nothing is blocked.
+sentence-transformers>=2.2
+
+# ---------------------------------------------------------------- dev
+pytest>=7.4
+httpx>=0.27          # required by fastapi.testclient
