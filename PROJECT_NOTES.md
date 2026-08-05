@@ -7,7 +7,7 @@ engineering around them was quietly broken in ways that would have wrecked the
 next phase — so we fixed the foundations, wrapped the system in a real API, and
 built the test suite that proves the fixes hold.
 
-**The numbers:** 11 tests → **165**. Price history: 30 rows over 2 days with zero
+**The numbers:** 11 tests → **197**. Price history: 30 rows over 2 days with zero
 price movement → **4,842 observations over 180 days** that actually move. Plus one
 of our published results turned out to be over-general, and we corrected it.
 
@@ -470,7 +470,7 @@ That CI assertion is the point: the bug from Part 1 is now something the
 
 ## Part 7 — The tests
 
-11 → 165, in 9 files.
+11 → 197, in 10 files.
 
 | File | Covers |
 |---|---|
@@ -483,6 +483,7 @@ That CI assertion is the point: the bug from Part 1 is now something the
 | `test_ebay_adapter.py` | the previously-unexecuted live adapter |
 | `test_api.py` | HTTP contract and input validation |
 | `test_frontend.py` | static mount, no-CDN rule, the click-swallowing regression |
+| `test_catalogue_links_recommender.py` | catalogue search, the never-claim-a-price boundary, recommendation relevance |
 
 Things worth pointing out about *how* they're written:
 
@@ -551,6 +552,198 @@ proxy that's easy to measure.
 
 ---
 
+## Part 9 — The question that changed the architecture
+
+**This is the best part of the story to tell, because the redirection came from
+asking the right question rather than from writing more code.**
+
+The project had a hand-written JSON file of products. The obvious next step was to
+keep adding to it — more phones, then laptops, then clothing. The right question
+was: *why are we typing products into a file at all? Amazon has everything.*
+
+### The answer: an aggregator has no catalogue
+
+Amazon has a product catalogue because Amazon **is a retailer** — sellers list
+into its taxonomy. An aggregator — Google Shopping, PriceGrabber, Junglee — has
+**none**. It takes your query, asks retailer APIs live, and resolves whatever
+comes back.
+
+So growing the JSON file was not a small version of the real thing. It was a
+different and unwinnable thing: every domain a user might search would need
+someone to type it in first, and the file would never be complete.
+
+> **The line to use:** "We deleted the product list as a source of truth. The
+> catalogue is now a remote resource with a local fallback — 194 products across
+> 24 categories, fetched over HTTP, no API key. Clothing, groceries, furniture,
+> beauty, footwear, jewellery. With real product images."
+
+### What that changed in the code
+
+It also killed a design I was halfway through writing. I had started a
+`categories.py` with keyword lists and per-category attribute rules — phones have
+storage, appliances have wattage, clothes have sizes. That has the same flaw:
+a new branch for every domain, forever, and until someone writes it that domain
+resolves badly and silently.
+
+The replacement is one universal observation:
+
+> **A quantity with a unit is a hard specification, in every domain.**
+
+| Domain | Title | Extracted |
+|---|---|---|
+| electronics | iPhone 15 **256GB** | `256gb` |
+| appliance | Mixer **750W** | `750w` |
+| grocery | Shampoo **500ml** | `0.5l` |
+| clothing | Shirt Navy **Size 42** | `size 42` |
+| TV | Bravia **55 inch** | `55in` |
+| AC | Voltas **1.5 Ton 3 Star** | `1.5ton · 3star` |
+
+One extractor, no taxonomy, no category branching anywhere. **A domain nobody
+anticipated resolves correctly the first time it appears.**
+
+### And it fixed a bug nobody had noticed
+
+A laptop title carries two `GB` figures: `"ThinkPad E14 16GB RAM 512GB SSD"`. The
+old extractor scanned for the first plausible number and returned **16** — the
+RAM — as the storage size. Two laptops differing only in disk size shared a block
+key on the wrong attribute.
+
+Comparing the **maximum per unit** fixes all three cases, and nothing has to know
+which number means RAM:
+
+| | Result |
+|---|---|
+| `128` vs `256` | different ✓ |
+| `{16, 512}` vs `{16, 1024}` | different ✓ |
+| `{128}` vs `{6, 128}` | **same** ✓ — omission is not evidence of a difference |
+
+Set equality fails the third case; set intersection fails the second. The maximum
+gets all three.
+
+### Two details only realistic data revealed
+
+- Apple sells the **"13-inch" MacBook Air whose panel is 13.6"**, and retailers
+  use both numbers for the same laptop. Exact matching split one product into two,
+  so screen size and battery compare with a relative tolerance while everything
+  else is exact.
+- **Bare `m` is excluded as a unit.** Far too common as something else — size M,
+  the M3 chip, model M240. The cost is asymmetric: a wrongly-extracted quantity
+  *blocks a correct merge*, while a missed one only defers to the embeddings. The
+  cheaper failure wins.
+
+---
+
+## Part 10 — The thing this project refuses to do
+
+**Have this answer ready. It is the most likely place to be challenged, and being
+first to it is worth more than any feature.**
+
+The requirement was: search a phone, see it's ₹70,000 on Amazon and ₹65,000 on
+Flipkart, with links to both.
+
+**The Amazon and Flipkart prices cannot be obtained legitimately.** Amazon's terms
+prohibit scraping; its Product Advertising API needs an approved Associates
+account with qualifying sales. Flipkart's affiliate programme is closed to new
+signups.
+
+So a price attributed to Amazon here would be **invented** — a fabricated record
+of a real company's pricing. Indefensible in a review, and actively harmful if
+the app is ever deployed publicly.
+
+What the project does instead is split links into two kinds and never conflate
+them:
+
+| Kind | Where it comes from | Price? |
+|---|---|---|
+| **Verified offer** | the source itself (eBay's own URL) | **Yes** — the exact offer shown |
+| **Retailer search** | constructed: `amazon.in/s?k=…` | **No** |
+
+Building a search URL is not scraping and breaks no terms. It lands the user on
+the retailer's real results, where the real price is. The UI styles the two
+differently and labels the second *"no price claimed."*
+
+> **The engineering point worth making:** there is a test called
+> `test_retailer_links_never_carry_a_price`. A rule stated only in a comment is
+> one edit away from being crossed silently — so the boundary is enforced by the
+> suite, not by good intentions.
+
+---
+
+## Part 11 — The recommender, and what it deliberately is not
+
+"Customers who bought this also bought" is collaborative filtering, which needs an
+interaction matrix — who bought what. **This project has no users.**
+
+The usual shortcut is to invent random purchases. That produces random
+recommendations that *look* exactly like a working recommender, and the difference
+is invisible until someone reads the output carefully. **That is worse than
+nothing.**
+
+So relevance comes from three signals that need no user data:
+
+| Signal | Weight | What it is |
+|---|---|---|
+| Complement | 1.00 | laptop → bag, dress → shoes, mascara → skincare |
+| Substitute | 0.55 | same category, comparable price |
+| Affinity | 0.35 | shared brand or tags |
+| *Co-occurrence* | *1.20* | *reserved — real behaviour outranks every rule* |
+
+Complements are defined per **category pair**, not per product, so a new product
+inherits them for free. Same principle as the attribute extractor: nothing that
+needs maintaining per item.
+
+**Two rules were wrong on the real data and I fixed them:** `MacBook Pro →
+Annibale Colombo Bed` and `Sofa → Lunch Box`. "A laptop goes with a desk and
+chair" is sound in the abstract — but this catalogue's furniture is beds and
+sofas. *A rule that is right in principle and wrong on the data is still wrong.*
+
+> **Say it plainly:** "This is a content-and-rules recommender, not collaborative
+> filtering. It cannot discover the non-obvious pairings CF finds from real
+> behaviour. `score_from_cooccurrence` is the wired slot for a real dataset, and
+> the blend already weights it above every rule."
+
+---
+
+## Part 12 — Measuring the resolver honestly on real data
+
+The F1 = 1.000 result is on **15 hand-labelled listings**. On the live
+194-product catalogue it is not 100%, and the number matters more than the claim.
+
+Measured by counting clusters holding more offers than there are sellers —
+if 4 sellers produce a 7-offer cluster, two products merged:
+
+| | Value |
+|---|---|
+| Products checked | ~100 across 9 categories |
+| Over-merged clusters | **8** (down from 10) |
+| Cluster precision | **~92%** |
+
+Two causes found and fixed:
+
+- **Variant designators were being thrown away.** `iPhone 6` and `iPhone X` both
+  reduced to `{iphone}` — the extractor drops tokens under three characters and
+  bare digits, which are *exactly* the tokens that separate models in a line.
+- **Word-named product lines had nothing to veto them.** Rolex Datejust, Cellini
+  and Submariner share a brand and a string shape; TF-IDF character n-grams
+  scored them near-identical. Stripping the brand before comparing distinctive
+  words fixed most of it — the brand is the token those titles share, so leaving
+  it in makes every product from one maker look related.
+
+**A fix that made things worse, and how it was caught.** The first version of the
+variant rule dropped gold-set recall from 1.000 to 0.900 — it split one real
+product, because retailers write both "Nord CE 4" and "Nord CE4", which tokenise
+to `{4}` and `{ce4}`. Comparing from the first digit onwards makes those agree
+while keeping `s7`/`s10` and `6`/`16` apart.
+
+> **The judgement call worth defending:** every further rule I tried broke the
+> gold set. So I stopped and reported the number instead of chasing it. TF-IDF
+> character n-grams fundamentally cannot tell "Beef Steak" from "Fish Steak" when
+> the rest of the string matches — that is not a rule problem, it is a model
+> problem. The principled fix is the transformer backend, which is a
+> configuration change. Knowing when to stop adding rules is part of the work.
+
+---
+
 ## The three lessons to leave a mentee with
 
 1. **A silent bug is worse than a crash.** Every bug in Part 1–3 had zero error
@@ -611,8 +804,11 @@ distributed for whatever product the user searched for. We implement both — pa
 - no recommender yet
 - no forecasting model yet (but no longer blocked — the data exists)
 - all price data is synthetic
-- the dashboard still reimplements TOPSIS in JavaScript
-- the repo has no remote yet — it lives on one laptop, which is not a backup
+- entity resolution is ~92% precise on the live catalogue, not 100% (Part 12)
+- the recommender is rules-and-content, not collaborative filtering (Part 11)
+- catalogue prices are reference prices from a demo API, not retailer quotes
+- the legacy `dashboard.html` still reimplements TOPSIS in JavaScript; the live
+  frontend at `web/app/` does not
 
 ---
 

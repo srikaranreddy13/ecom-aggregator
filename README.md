@@ -2,12 +2,18 @@
 
 Project Work — CVR College of Engineering, Dept. of CSE (AY 2026-27)
 
-Cross-marketplace product aggregation with semantic entity resolution and
-multi-criteria (TOPSIS) ranking, served over an HTTP API.
+Cross-marketplace product aggregation with domain-agnostic entity resolution,
+multi-criteria (TOPSIS) ranking and recommendations, served over an HTTP API with
+a live web frontend.
 
-**Status:** aggregation, entity resolution and ranking are complete and tested.
-Recommendation and price forecasting are not built yet — but the data
-infrastructure they need now exists and works.
+**Status:** aggregation, entity resolution, ranking, buy links and
+recommendations are complete and tested (**197 tests**). Price forecasting is not
+built yet, but its data infrastructure exists and works.
+
+Products come from a **live catalogue over HTTP with no API key** — 194 products
+across 24 categories (clothing, groceries, furniture, beauty, footwear,
+jewellery, laptops, phones) with real product images. A fresh clone has a working
+multi-category app immediately.
 
 > **Explaining this project to someone?** Read **[PROJECT_NOTES.md](PROJECT_NOTES.md)**
 > for the narrative — what was broken, why it mattered, the reasoning behind each
@@ -52,13 +58,17 @@ pipeline stage:
 
 | Tab | Shows |
 |---|---|
-| **1 · Search & Rank** | live TOPSIS. Move a slider → the winner changes |
+| **1 · Search & Rank** | search or browse 24 categories · product images · all three shopper profiles side by side · buy links · "customers also bought" |
 | **2 · Entity Resolution** | extracted attributes, block keys, why XM4 ≠ XM5 |
 | **3 · Price History** | 180-day series per item, inline SVG chart |
 | **4 · System Health** | live diagnostics, including `flat_series` |
 
+Try searching `shirt`, `sofa`, `mascara`, `nike shoes`, `laptop` — or click a
+category chip to browse.
+
 The browser does **not** rank anything — every score comes from
-`src/ranking/mcdm.py` via `GET /search`. No CDN, no build step, works offline.
+`src/ranking/mcdm.py` via `GET /search`. No CDN, no build step, works offline
+(falling back to a bundled catalogue if the network is down).
 
 ---
 
@@ -70,7 +80,7 @@ runs the demo and evaluations, builds the dashboard, opens it.
 Everything individually (set `EMBEDDER_BACKEND` first, see above):
 
 ```
-python -m pytest tests -q                        165 tests
+python -m pytest tests -q                        197 tests
 python -m scripts.backfill_prices --days 180     generate price history
 python -m scripts.serve                          API + frontend -> :8000
 python -m scripts.demo                           terminal walkthrough
@@ -115,20 +125,105 @@ listing came from an API, a simulator, or a cache.
 
 | Module | Files | Status |
 |---|---|---|
+| **Live product catalogue** | `src/catalogue.py` | **Working** — 194 products, 24 categories |
 | **Domain-agnostic attribute extraction** | `src/matching/attributes.py` | **Working** |
 | Source adapters | `src/adapters/base.py`, `mock_adapter.py`, `ebay_adapter.py` | Working |
-| Synthetic market | `src/adapters/synthetic_adapter.py` | Working |
+| Synthetic market (seller layer) | `src/adapters/synthetic_adapter.py` | Working |
 | HTTP resilience (retry, rate limit) | `src/adapters/http.py`, `errors.py` | Working |
-| Entity resolution | `src/matching/` | Working |
+| Entity resolution | `src/matching/` | Working (~92% cluster precision, see below) |
 | MCDM ranking | `src/ranking/mcdm.py` | Working |
+| **Buy links** | `src/links.py` | **Working** |
+| **Recommender** | `src/recommender.py` | **Working** (rules + content, not CF) |
 | Currency normalisation | `src/money.py` | Working |
 | Storage + price history | `src/storage/db.py` | Working |
 | Configuration | `src/config.py` | Working |
 | HTTP API | `src/api/` | Working |
-| **Live frontend** | `web/app/` | **Working** |
+| Live frontend | `web/app/` | Working |
 | Static snapshot dashboard | `web/template.html`, `scripts/build_dashboard.py` | Working (legacy) |
-| **Recommender (hybrid CF)** | — | **Not started** |
-| **Price forecasting** | — | **Not started** (data now available) |
+| **Price forecasting** | — | **Not started** (data available) |
+
+---
+
+## Where products come from
+
+**An aggregator has no catalogue of its own.** Amazon has a product catalogue
+because Amazon *is* a retailer — sellers list into its taxonomy. An aggregator
+(Google Shopping, PriceGrabber, Junglee) has none: it queries retailer APIs at
+request time and resolves whatever comes back.
+
+So the product list is a **remote, replaceable resource**, never a file to grow:
+
+| Source | What it gives | Needs a key? |
+|---|---|---|
+| `DummyJsonCatalogue` *(default)* | 194 products, 24 categories, real images | **No** |
+| `FileCatalogue` | `data/catalogue.json`, ~44 products | No — offline fallback only |
+| eBay Browse API | real sellers, real prices, real product URLs | Yes (free) |
+
+Set with `CATALOGUE_SOURCE=auto|dummyjson|file`. A fallback logs a **warning**,
+never passes silently — serving 44 local products while appearing to serve 194
+live ones is exactly the kind of quiet degradation this project has been bitten
+by before.
+
+**Product and seller are separate dimensions.** The catalogue supplies products;
+the adapter layer supplies offers — who sells it, at what price, how fast, how
+well rated. That separation is what lets the same product list be served by the
+simulated marketplace today and by live eBay sellers tomorrow with no change to
+the catalogue code.
+
+---
+
+## Buy links — and one thing this project will not do
+
+Two kinds of link, never conflated:
+
+| Kind | Source | Carries a price? |
+|---|---|---|
+| **Verified offer** | the source itself (`Listing.url`, e.g. eBay) | **Yes** — the exact offer shown |
+| **Retailer search** | constructed (`amazon.in/s?k=…`) | **No** |
+
+`https://www.amazon.in/s?k=nike+air+jordan+1` is just a URL. Building one is not
+scraping and breaks no terms of service. It lands the user on the retailer's real
+results for that product.
+
+**What it will not do is display "Amazon: ₹70,000".** Amazon's terms prohibit
+scraping and its Product Advertising API requires an approved Associates account
+with qualifying sales; Flipkart's affiliate programme is closed to new signups.
+A price attributed to either would therefore be **invented — a fabricated record
+of a real company's pricing.** That is indefensible in a review and actively
+harmful if the app is deployed publicly. Every link carries its `kind`, and
+`test_retailer_links_never_carry_a_price` enforces the boundary, because a rule
+stated only in a comment is one edit from being crossed silently.
+
+Verified links are empty until a live source is configured — the simulated
+sellers have no web pages, and inventing URLs for them would be worse than having
+none.
+
+---
+
+## Recommendations
+
+`GET /recommendations?title=…`. Three signals, blended:
+
+| Signal | Weight | What it is |
+|---|---|---|
+| Complement | 1.00 | cross-category rules — laptop → bag, dress → shoes |
+| Substitute | 0.55 | same category, comparable price band |
+| Affinity | 0.35 | shared brand or tags |
+| *Co-occurrence* | *1.20* | *reserved: real behaviour outranks every rule* |
+
+Complements are defined per **category pair**, not per product, so a new product
+inherits them for free — the same principle as the attribute extractor.
+
+**Collaborative filtering is deliberately absent, not faked.** CF needs an
+interaction matrix and this project has no users. Inventing random purchases
+produces random recommendations that are indistinguishable from a working
+recommender until someone reads the output carefully. `score_from_cooccurrence`
+is the wired slot where a real dataset (Amazon Reviews, RetailRocket) enters, and
+the blend already weights it above every rule.
+
+Say this plainly in the review: **this is a content-and-rules recommender, not
+collaborative filtering.** It cannot discover the non-obvious pairings CF finds
+from real behaviour.
 
 ---
 
@@ -145,8 +240,11 @@ python -m scripts.serve
 |---|---|
 | `GET /health` | liveness **plus data-quality diagnostics** |
 | `GET /config` | effective configuration, secrets redacted |
-| `GET /search?q=iphone&price=0.9` | ranked offers under a weight vector |
+| `GET /search?q=shirt&price=0.9` | ranked offers, per-profile winners, images, buy links |
+| `GET /search?category=womens-dresses` | browse instead of search |
 | `POST /search` | same, JSON body |
+| `GET /categories` | browsable categories with product counts |
+| `GET /recommendations?title=…` | "customers also bought" |
 | `GET /products` | resolved clusters + **extracted attributes and block keys** |
 | `GET /price-history/{source}/{id}` | one item's observed series |
 | `GET /tracked-items` | everything with enough history to model |
@@ -199,6 +297,48 @@ did not vanish.
 The script also prints exactly which pairs the veto stopped and how similar their
 text was. The XM4/XM5 pair sits at 0.625 cosine similarity — it *would* have
 merged on semantics alone.
+
+### Result 1b — precision on the live catalogue (the honest number)
+
+F1 = 1.000 above is on 15 hand-labelled listings. On the **live 194-product
+catalogue** across 24 categories, measured by counting clusters holding more
+offers than there are sellers:
+
+| | Value |
+|---|---|
+| Products checked | ~100 across 9 categories |
+| Over-merged clusters | **8** |
+| Approximate cluster precision | **~92%** |
+
+Down from 10 after two targeted fixes:
+
+- **Variant designators were being discarded.** `iPhone 6` and `iPhone X` both
+  reduced to `{iphone}`, because the extractor drops tokens under three
+  characters and bare digits — exactly the tokens that separate one model in a
+  line from the next. Galaxy S7/S8/S10 and Realme C35 now separate.
+- **Product lines named by words had nothing to veto them.** Rolex Datejust,
+  Cellini and Submariner share a brand and a string shape, and TF-IDF character
+  n-grams scored them as near-identical. A disjoint-product-name check fixed most
+  of it, stripping the brand first — it is the token those titles share, and
+  leaving it in makes every product from one maker look related.
+
+A first attempt at the variant rule **dropped gold-set recall from 1.000 to
+0.900** by splitting one real product: retailers write both "Nord CE 4" and
+"Nord CE4", which tokenise to `{4}` and `{ce4}`. Comparing from the first digit
+onwards makes those agree while keeping `s7`/`s10` and `6`/`16` apart.
+
+**What remains is beyond string heuristics**, and is reported rather than chased:
+
+| Still merging | Why |
+|---|---|
+| `iPhone X` / `Realme XT` | letter-only model names — no digit to compare |
+| `Beef Steak` / `Fish Steak` | differ by one word while sharing the noun |
+| `Cat Food` / `Dog Food` | same |
+
+Every further rule attempted broke the gold set. The principled fix is the
+**transformer embedding backend**, which is a configuration change
+(`EMBEDDER_BACKEND=transformer`), not new code — TF-IDF character n-grams
+fundamentally cannot tell "Beef" from "Fish" when the rest of the string matches.
 
 Three extraction bugs found during development, all preserved as regression tests:
 
@@ -403,11 +543,18 @@ Read this before the review — your supervisor will ask.
 4. **Attribute extraction is English- and electronics-specific.** Apparel (size,
    fit, material) and groceries (weight, pack count) need different rules. Scope
    to one or two categories and say so explicitly.
-5. **No recommender yet.** Collaborative filtering needs user-interaction data
-   you do not have. Use a public dataset (Amazon Reviews, RetailRocket) rather
-   than inventing synthetic users.
+5. **The recommender is rules-and-content, not collaborative filtering.** It
+   works and its suggestions are relevant, but it cannot find the non-obvious
+   pairings CF discovers from real behaviour. Upgrade with a public interaction
+   dataset (Amazon Reviews, RetailRocket) — the slot is wired.
 6. **No price forecasting yet** — but no longer blocked. 180 days × 28 items of
    varying, autocorrelated series are available now.
+9. **Entity resolution is ~92% precise on the live catalogue**, not 100%. See
+   Result 1b. The fix is the transformer backend, not more string rules.
+10. **Catalogue prices are reference prices, not retailer quotes.** The live
+    catalogue is a public demo API: its products and images are real data over
+    real HTTP, but its prices are not quotes from a shop. `is_reference_price`
+    marks this and it stays labelled downstream.
 7. **No remote yet.** The repo exists locally but has never been pushed, so
    there is no off-machine backup. Create a private GitHub repo and push.
 8. **The legacy `dashboard.html` still re-implements TOPSIS in JavaScript.** The
@@ -433,13 +580,18 @@ In dependency order.
    then SARIMA or gradient boosting on lag features. Report MAE/MAPE *against
    naive*. If you do not beat naive, say so — that is still a result. Deliver a
    "buy now vs. wait" signal with a confidence band.
-4. **Recommender.** Popularity → item-item CF → matrix factorisation → hybrid.
-   The novelty is the **fusion**: CF behaviour signal + content features from the
+4. **Upgrade the recommender to real collaborative filtering.** Load a public
+   interaction dataset into `score_from_cooccurrence`, then evaluate
+   leave-one-out with Recall@K and NDCG@K against the current rules baseline.
+   The novelty is the **fusion**: CF behaviour + content features from the
    resolver's extracted attributes + the MCDM weight vector as an explicit
    preference prior. That three-way fusion is what makes "hyper-personalised"
-   defensible, and it is what ties the existing modules into one contribution
-   rather than three separate ones.
-5. **Point the dashboard at the API** so the ranking has one implementation.
+   defensible, and what ties the modules into one contribution rather than three.
+5. **Try `EMBEDDER_BACKEND=transformer`** and re-measure Result 1b. If it fixes
+   the Beef/Fish class of error, that is a clean result: a table of cluster
+   precision by backend.
+6. **Get eBay credentials in** for real seller prices and verified buy links.
+7. **Delete the legacy `dashboard.html`** once nobody depends on a server-free page.
 
 ---
 
@@ -458,11 +610,14 @@ cached — and that is now true in the code, not just in this file.
 
 ```
 src/config.py            environment-driven settings, single source of truth
+src/catalogue.py         the PRODUCT dimension: live API + offline fallback
+src/links.py             buy links: verified offers vs retailer search
+src/recommender.py       complements + substitutes + affinity
 src/logging_setup.py     structured logging (text or JSON)
 src/money.py             currency normalisation
 src/pipeline.py          fetch -> normalise -> cache -> resolve -> rank
 src/adapters/            base.py  errors.py  http.py  mock_  ebay_  synthetic_
-src/matching/            embedder.py  resolver.py
+src/matching/            attributes.py  embedder.py  resolver.py
 src/ranking/             mcdm.py
 src/storage/             db.py  (cache + price history + migrations)
 src/api/                 app.py  schemas.py  deps.py
@@ -477,8 +632,9 @@ scripts/analyse_normalisation.py the refined Result 2
 scripts/build_dashboard.py       static dashboard
 scripts/update_fx_rates.py       refresh the FX snapshot
 
-tests/                   165 tests across 9 files
-data/                    sample_listings.json  fx_rates.json  aggregator.db
+tests/                   197 tests across 10 files
+data/                    catalogue.json (offline fallback)  fx_rates.json
+                         sample_listings.json (gold eval set)  aggregator.db
 Dockerfile  docker-compose.yml  .github/workflows/ci.yml  .env.example
 
 README.md                reference: what exists, results, limitations
