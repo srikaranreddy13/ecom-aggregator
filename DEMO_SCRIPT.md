@@ -47,7 +47,7 @@ python -m scripts.backfill_prices --days 180
 
 Confirm two things before you go anywhere near the projector:
 
-- the tests say **`165 passed`**
+- the tests say **`197 passed`**
 - the backfill says **`flat (unforecastable): 0`**
 
 If either is wrong, fix it now. See Troubleshooting at the bottom.
@@ -74,7 +74,7 @@ python -m pytest tests -q
 
 **Say while it runs:**
 
-> "165 tests. It started at 11. Most of the new ones are named after a specific
+> "197 tests. It started at 11. Most of the new ones are named after a specific
 > bug — the test name is documentation that can't go stale, because if the
 > behaviour changes the test fails."
 
@@ -370,7 +370,7 @@ git log --oneline
 git status
 ```
 
-> "Under version control, with CI configured. Every push runs all 165 tests on
+> "Under version control, with CI configured. Every push runs all 197 tests on
 > two Python versions, asserts the price history isn't flat, and boots the
 > Docker container to check the health endpoint."
 
@@ -395,7 +395,7 @@ If they remember nothing else:
 ```
 set EMBEDDER_BACKEND=tfidf                        always do this first
 
-python -m pytest tests -q                         165 tests
+python -m pytest tests -q                         197 tests
 python -m pytest tests -q -k currency -v          one bug's tests
 
 python -m scripts.backfill_prices --days 180      generate price history

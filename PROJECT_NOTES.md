@@ -459,7 +459,7 @@ Ours reports the failures this project can actually *have*:
   can't run the transformer backend). Runs as a non-root user.
 - **docker-compose** — API + a backfill job + an optional daily collector. The
   database is a named volume, so `docker compose down` doesn't destroy history.
-- **GitHub Actions** — runs 145 tests on two Python versions, **asserts the
+- **GitHub Actions** — runs 197 tests on two Python versions, **asserts the
   synthetic history is not flat**, checks the evaluation scripts and dashboard
   still build, then boots the container and hits `/health`.
 

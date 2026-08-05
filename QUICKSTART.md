@@ -58,7 +58,7 @@ re-run it if you open a new one. To make it permanent, copy `.env.example` to
 python -m pytest tests -q
 ```
 
-Expect **165 passed**. If you see 11, you are running an older copy.
+Expect **197 passed**. If you see 11, you are running an older copy.
 
 ### Step 4 — generate the price history
 
@@ -292,4 +292,4 @@ your price history. Use `down -v` only when you mean to.
 | `scripts/collect_prices.py` | Daily snapshot — schedule this |
 | `scripts/analyse_normalisation.py` | The refined Result 2 |
 | `scripts/update_fx_rates.py` | Refresh the FX snapshot |
-| `tests/` | 145 tests |
+| `tests/` | 197 tests |
