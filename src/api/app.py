@@ -38,6 +38,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from ..adapters.errors import AdapterError
+from ..catalogue import get_catalogue
 from ..config import ROOT, settings
 from ..logging_setup import configure_logging, get_logger
 from ..matching.resolver import (
@@ -46,8 +47,10 @@ from ..matching.resolver import (
     extract_model_number,
     extract_storage_gb,
 )
+from ..links import retailer_links
 from ..money import rate_table, rate_table_age_days
 from ..ranking.mcdm import DEFAULT_WEIGHTS
+from ..recommender import get_recommender
 from ..storage import db
 from .deps import VERSION, resources
 from .schemas import (
@@ -178,7 +181,7 @@ def create_app() -> FastAPI:
     # ---------------------------------------------------------- search
 
     def _run_search(query: str, weights: Weights, limit_per_source: int,
-                    normalisation: str) -> SearchResponse:
+                    normalisation: str, category: str | None = None) -> dict:
         if weights.is_degenerate():
             raise HTTPException(
                 status_code=422,
@@ -191,30 +194,95 @@ def create_app() -> FastAPI:
             weights=weights.as_dict(),
             limit_per_source=limit_per_source,
             normalisation=normalisation,
+            category=category,
         )
-        return SearchResponse(
-            query=query,
-            normalisation=normalisation,
-            weights=weights.as_dict(),
-            count=len(results),
-            took_ms=round((time.monotonic() - started) * 1000, 1),
-            diagnostics=pipe.stats,
-            results=results,
-        )
+        return {
+            "query": query,
+            "category": category,
+            "normalisation": normalisation,
+            "weights": weights.as_dict(),
+            "count": len(results),
+            "took_ms": round((time.monotonic() - started) * 1000, 1),
+            "diagnostics": pipe.stats,
+            "results": results,
+        }
 
-    @app.post("/search", response_model=SearchResponse, tags=["search"])
+    @app.post("/search", tags=["search"])
     def search_post(req: SearchRequest):
         """Rank offers for a query under a user weight vector."""
         return _run_search(req.query, req.weights, req.limit_per_source,
                            req.normalisation)
 
-    @app.get("/search", response_model=SearchResponse, tags=["search"])
+    @app.get("/categories", tags=["search"])
+    def categories():
+        """Browsable categories, with a product count each.
+
+        Lets the UI offer browsing rather than only search -- a shopper who does
+        not know what they want cannot type a query.
+        """
+        cat = get_catalogue()
+        counts: dict[str, int] = {}
+        for p in cat.all_products():
+            if p.category:
+                counts[p.category] = counts.get(p.category, 0) + 1
+        return {
+            "source": cat.name,
+            "is_live": cat.is_live,
+            "total_products": len(cat.all_products()),
+            "categories": [
+                {"name": name,
+                 "label": name.replace("-", " ").title(),
+                 "count": count}
+                for name, count in sorted(counts.items())
+            ],
+        }
+
+    @app.get("/recommendations", tags=["search"])
+    def recommendations(
+        title: str = Query(..., min_length=1, max_length=300,
+                           description="product title to recommend against"),
+        k: int = Query(6, ge=1, le=24),
+    ):
+        """'Customers who bought this also bought' for one product.
+
+        Matched by title because the ranking pipeline works in Listings, which
+        carry titles but not catalogue ids.
+        """
+        rec = get_recommender()
+        items = rec.recommend_for_titles([title], k=k)
+
+        out = []
+        for r in items:
+            row = r.to_dict()
+            # A recommendation the user cannot act on is just a picture. These
+            # are catalogue products with no offers fetched, so the only honest
+            # link is a retailer search -- same rule as everywhere else: no
+            # price is claimed for it.
+            links = retailer_links(r.product.title, brand=r.product.brand,
+                                  currency=settings.base_currency)
+            row["search_url"] = links[0].url if links else None
+            row["search_links"] = [b.to_dict() for b in links]
+            out.append(row)
+
+        return {
+            "anchor_title": title,
+            "count": len(out),
+            "recommendations": out,
+            # Stated in the payload so any client -- not just our own frontend --
+            # reports the basis honestly rather than implying real behaviour data.
+            "basis": ("complement rules, substitutes and brand/tag affinity. "
+                      "No user interaction data is used; this is a content-and-"
+                      "rules recommender, not collaborative filtering."),
+        }
+
+    @app.get("/search", tags=["search"])
     def search_get(
         q: str = Query("", max_length=200, description="product query"),
+        category: str | None = Query(None, max_length=60),
         price: float = Query(DEFAULT_WEIGHTS["price"], ge=0, le=1),
         delivery_days: float = Query(DEFAULT_WEIGHTS["delivery_days"], ge=0, le=1),
         seller_rating: float = Query(DEFAULT_WEIGHTS["seller_rating"], ge=0, le=1),
-        limit_per_source: int = Query(25, ge=1, le=200),
+        limit_per_source: int = Query(40, ge=1, le=200),
         normalisation: str = Query("minmax", pattern="^(minmax|vector)$"),
     ):
         """Query-string form, so the dashboard and a browser can call it directly.
@@ -224,7 +292,8 @@ def create_app() -> FastAPI:
         """
         weights = Weights(price=price, delivery_days=delivery_days,
                           seller_rating=seller_rating)
-        return _run_search(q, weights, limit_per_source, normalisation)
+        return _run_search(q, weights, limit_per_source, normalisation,
+                           category=category)
 
     @app.get("/products", tags=["search"])
     def products(

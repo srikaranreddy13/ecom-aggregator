@@ -81,6 +81,7 @@ $$('.tab').forEach(tab => {
 
 const state = {
   normalisation: 'minmax',
+  category: null,       // null = all categories
   resolveLoaded: false,
   pricesLoaded: false,
   selectedItem: null,
@@ -174,6 +175,7 @@ async function runSearch({ keepScroll = false } = {}) {
     price: w.price, delivery_days: w.delivery_days, seller_rating: w.seller_rating,
     normalisation: state.normalisation,
   });
+  if (state.category) params.set('category', state.category);
 
   try {
     const data = await api('/search?' + params);
@@ -223,12 +225,74 @@ const pstage = (num, lbl, val) =>
   `<div class="pstage"><span class="num">${esc(num)}</span>
      <span class="lbl">${esc(lbl)}</span><span class="val">${esc(val)}</span></div>`;
 
+/** Profile metadata: label, icon and the weight vector the server used. */
+const PROFILE_META = {
+  budget: { icon: '💰', label: 'Budget hunter', hint: 'cheapest' },
+  hurry:  { icon: '⚡', label: 'In a hurry',    hint: 'fastest' },
+  trust:  { icon: '🛡️', label: 'Trust first',   hint: 'best rated' },
+};
+
+function profileStrip(p) {
+  const winners = p.profiles || {};
+  const distinct = new Set(Object.values(winners).map(w => w.source)).size;
+  return `
+    <div class="profiles">
+      <div class="profiles-head">
+        Best offer for each kind of shopper
+        <span class="${distinct > 1 ? 'ok-pill' : 'warn-pill'}">
+          ${distinct > 1 ? `${distinct} different winners` : 'all three agree'}
+        </span>
+      </div>
+      <div class="profile-grid">
+        ${Object.entries(winners).map(([key, w]) => {
+          const m = PROFILE_META[key] || { icon: '•', label: key, hint: '' };
+          return `<div class="profile-card">
+            <div class="pc-head"><span class="pc-icon">${m.icon}</span>
+              <span class="pc-label">${esc(m.label)}</span></div>
+            <div class="pc-price">${money(w.price)}</div>
+            <div class="pc-seller">${esc(w.seller_name || w.source)}</div>
+            <div class="pc-facts">
+              <span>${w.delivery_days ?? '—'}d</span>
+              <span>${w.seller_rating ?? '—'}★</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+function buyLinks(p) {
+  const links = p.links || {};
+  const verified = links.verified || [];
+  const search = links.search || [];
+  if (!verified.length && !search.length) return '';
+
+  return `<div class="buy">
+    ${verified.length ? `
+      <div class="buy-row">
+        <span class="buy-label verified">✓ Verified offers</span>
+        ${verified.slice(0, 4).map(b => `
+          <a class="buybtn verified" href="${esc(b.url)}" target="_blank" rel="noopener">
+            ${esc(b.label)} · ${money(b.price)}</a>`).join('')}
+      </div>` : ''}
+    <div class="buy-row">
+      <span class="buy-label">Find it on</span>
+      ${search.map(b => `
+        <a class="buybtn" href="${esc(b.url)}" target="_blank" rel="noopener">
+          ${esc(b.label)} ↗</a>`).join('')}
+      ${!verified.length ? `<span class="buy-note" title="${esc(links.note || '')}">
+        no price claimed — opens the retailer's own results</span>` : ''}
+    </div>
+  </div>`;
+}
+
 function renderResults(data) {
   const box = $('#results');
   if (!data.results.length) {
     box.innerHTML = `<div class="empty">
-      No products matched <strong>${esc(data.query || '(everything)')}</strong>.
-      Try <em>iphone</em>, <em>samsung</em>, <em>sony</em>, or clear the box.
+      No products matched <strong>${esc(data.query || '(everything)')}</strong>${
+        data.category ? ` in <strong>${esc(data.category)}</strong>` : ''}.
+      Try <em>shirt</em>, <em>laptop</em>, <em>sofa</em>, <em>watch</em>, or pick a category above.
     </div>`;
     return;
   }
@@ -242,20 +306,36 @@ function renderResults(data) {
 
     const maxScore = Math.max(...p.all_offers.map(o => o.score)) || 1;
 
-    return `<article class="product">
+    return `<article class="product" data-title="${esc(p.product)}">
       <div class="product-head">
-        <div>
+        ${p.image_url ? `<img class="thumb" src="${esc(p.image_url)}"
+             alt="${esc(p.product)}" loading="lazy"
+             onerror="this.classList.add('broken')">`
+          : `<div class="thumb broken"></div>`}
+        <div class="ph-main">
           <div class="product-title">${esc(p.product)}</div>
           <div class="product-meta">
             <span class="badge">${p.num_offers} offers</span>
-            ${p.sources.map(s => `<span class="badge">${esc(s)}</span>`).join('')}
-            ${changed ? '<span class="badge" style="border-color:var(--win);color:var(--win)">winner changed</span>' : ''}
+            ${p.category ? `<span class="badge cat">${esc(p.category)}</span>` : ''}
+            ${p.brand ? `<span class="badge">${esc(p.brand)}</span>` : ''}
+            ${p.specs && p.specs !== 'no specs detected'
+              ? `<span class="badge spec">${esc(p.specs)}</span>` : ''}
+            ${changed ? '<span class="badge win">winner changed</span>' : ''}
           </div>
         </div>
         <div class="savings">
           <div class="amt">${money(spread)}</div>
           <div class="lbl">spread · ${pct.toFixed(1)}%</div>
         </div>
+      </div>
+
+      ${profileStrip(p)}
+      ${buyLinks(p)}
+
+      <div class="recwrap">
+        <button class="recbtn" data-title="${esc(p.product)}">
+          Customers also bought →</button>
+        <div class="recs"></div>
       </div>
 
       <table class="offers">
@@ -285,7 +365,7 @@ function renderResults(data) {
       </table>
 
       <div class="why">
-        <div class="why-head">Why ${esc(p.best_offer.source)} won — closeness to the ideal, per criterion</div>
+        <div class="why-head">Why ${esc(p.best_offer.source)} won <em>your</em> weights — closeness to the ideal</div>
         <div class="why-bars">
           ${whyRow('Low price',     p.best_offer.why.price,         'price')}
           ${whyRow('Fast delivery', p.best_offer.why.delivery_days, 'delivery')}
@@ -294,6 +374,79 @@ function renderResults(data) {
       </div>
     </article>`;
   }).join('');
+
+  wireRecommendationButtons(box);
+}
+
+/** Lazy-load recommendations: one request per product the user actually opens,
+ *  rather than N requests up front for panels most people never expand. */
+function wireRecommendationButtons(root) {
+  $$('.recbtn', root).forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const panel = btn.parentElement.querySelector('.recs');
+      if (panel.dataset.loaded === '1') {
+        panel.classList.toggle('open');
+        return;
+      }
+      btn.disabled = true;
+      panel.innerHTML = `<div class="loading" style="padding:16px">
+        <span class="spinner"></span>finding related products…</div>`;
+      panel.classList.add('open');
+      try {
+        const d = await api('/recommendations?' + new URLSearchParams({
+          title: btn.dataset.title, k: 6,
+        }));
+        panel.dataset.loaded = '1';
+        panel.innerHTML = d.count ? `
+          <div class="rec-grid">
+            ${d.recommendations.map(r => `
+              <a class="rec" href="${esc((r.search_url || '#'))}"
+                 title="${esc(r.reason)}">
+                ${r.image_url ? `<img src="${esc(r.image_url)}" alt=""
+                     loading="lazy" onerror="this.style.display='none'">` : ''}
+                <div class="rec-body">
+                  <div class="rec-title">${esc(r.title)}</div>
+                  <div class="rec-meta">${esc(r.category || '')}</div>
+                  <div class="rec-why">${esc(r.reason)}</div>
+                </div>
+              </a>`).join('')}
+          </div>
+          <div class="rec-basis">${esc(d.basis)}</div>`
+          : `<div class="empty" style="padding:18px">
+               No related products found for this item.</div>`;
+      } catch (err) {
+        showError(panel, err);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+// ---------------------------------------------------------------- categories
+
+async function loadCategories() {
+  const bar = $('#catChips');
+  try {
+    const d = await api('/categories');
+    bar.innerHTML = `<button class="catchip active" data-cat="">All</button>` +
+      d.categories.map(c => `
+        <button class="catchip" data-cat="${esc(c.name)}"
+          title="${c.count} products">${esc(c.label)}</button>`).join('');
+
+    $$('.catchip', bar).forEach(chip => {
+      chip.addEventListener('click', () => {
+        $$('.catchip', bar).forEach(x => x.classList.toggle('active', x === chip));
+        state.category = chip.dataset.cat || null;
+        runSearch();
+      });
+    });
+    $('#footerInfo').textContent =
+      `${d.total_products} products · ${d.categories.length} categories · ` +
+      `catalogue: ${d.source}${d.is_live ? ' (live)' : ' (offline fallback)'}`;
+  } catch (err) {
+    bar.innerHTML = `<span class="hint">categories unavailable</span>`;
+  }
 }
 
 function whyRow(label, value, cls) {
@@ -631,6 +784,7 @@ function updateStatusChip(h) {
 
 (async function boot() {
   syncWeightLabels();
-  await loadHealth();     // fills the status chip before the first search
+  await loadHealth();        // fills the status chip before the first search
+  await loadCategories();    // browse bar, and reports catalogue size in the footer
   await runSearch();
 })();

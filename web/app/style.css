@@ -236,6 +236,133 @@ input[type=range]::-moz-range-thumb {
 .pstage .lbl { color: var(--text-2); }
 .pstage .val { font-family: var(--mono); font-size: 12px; color: var(--text); }
 
+/* ---------------------------------------------------------------- categories */
+
+.catbar {
+  display: flex; align-items: flex-start; gap: 12px;
+  margin-bottom: 16px; padding: 12px 14px;
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.catbar-label {
+  flex: none; padding-top: 4px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: .7px; color: var(--text-3);
+}
+.catchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.catchip {
+  padding: 5px 11px; font: inherit; font-size: 12px; cursor: pointer;
+  background: var(--bg-3); color: var(--text-2);
+  border: 1px solid var(--line); border-radius: 100px; white-space: nowrap;
+}
+.catchip:hover { border-color: var(--accent); color: var(--text); }
+.catchip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--text); }
+
+/* ---------------------------------------------------------------- thumbnails */
+
+.thumb {
+  flex: none; width: 76px; height: 76px; border-radius: 8px;
+  object-fit: cover; background: var(--bg);
+  border: 1px solid var(--line);
+}
+/* A broken image must not leave a torn icon mid-demo. Product images come from
+   a third-party CDN, so some WILL fail; this degrades to a neutral tile. */
+.thumb.broken {
+  object-fit: none;
+  background: linear-gradient(135deg, var(--bg-3), var(--bg));
+}
+.thumb.broken::after { content: ""; }
+.ph-main { flex: 1; min-width: 0; }
+
+.badge.cat  { border-color: #2f5b8a; color: #8ab4f8; }
+.badge.spec { border-color: #3a5a3a; color: #8fd694; font-family: var(--mono); }
+.badge.win  { border-color: var(--win); color: var(--win); }
+
+/* ---------------------------------------------------------------- profiles */
+
+.profiles { padding: 13px 16px; border-bottom: 1px solid var(--line); }
+.profiles-head {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--text-3);
+}
+.ok-pill, .warn-pill {
+  padding: 2px 9px; border-radius: 100px; font-size: 10.5px;
+  text-transform: none; letter-spacing: 0; font-weight: 600;
+}
+.ok-pill   { background: rgba(63,185,80,.14); color: var(--win);
+             border: 1px solid rgba(63,185,80,.3); }
+.warn-pill { background: rgba(210,153,34,.14); color: var(--warn);
+             border: 1px solid rgba(210,153,34,.3); }
+
+.profile-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 9px;
+}
+.profile-card {
+  padding: 11px 12px; border-radius: 8px;
+  background: var(--bg-3); border: 1px solid var(--line);
+}
+.pc-head { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
+.pc-icon { font-size: 13px; }
+.pc-label { font-size: 11.5px; color: var(--text-2); }
+.pc-price { font-family: var(--mono); font-size: 17px; font-weight: 650; }
+.pc-seller { font-size: 11.5px; color: var(--text-2); margin-top: 2px;
+             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-facts { display: flex; gap: 10px; margin-top: 6px;
+            font-family: var(--mono); font-size: 11px; color: var(--text-3); }
+
+/* ---------------------------------------------------------------- buy links */
+
+.buy { padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.buy-row { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.buy-row + .buy-row { margin-top: 8px; }
+.buy-label {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px;
+  color: var(--text-3); margin-right: 3px;
+}
+.buy-label.verified { color: var(--win); }
+.buybtn {
+  padding: 6px 12px; border-radius: 7px; font-size: 12.5px; text-decoration: none;
+  background: var(--bg-3); color: var(--text-2); border: 1px solid var(--line);
+}
+.buybtn:hover { border-color: var(--accent); color: var(--text); }
+/* A verified offer is a real price at a real seller, so it gets the emphasis.
+   A search link is a lead, not a quote, and must never look like one. */
+.buybtn.verified {
+  background: rgba(63,185,80,.12); border-color: rgba(63,185,80,.4);
+  color: #8fd694; font-weight: 600; font-family: var(--mono);
+}
+.buy-note { font-size: 11px; color: var(--text-3); font-style: italic; }
+
+/* ---------------------------------------------------------------- recs */
+
+.recwrap { border-bottom: 1px solid var(--line); }
+.recbtn {
+  width: 100%; padding: 10px 16px; text-align: left; cursor: pointer;
+  background: none; border: 0; font: inherit; font-size: 12.5px; color: var(--accent);
+}
+.recbtn:hover { background: var(--bg-3); }
+.recbtn:disabled { color: var(--text-3); cursor: default; }
+.recs { display: none; padding: 0 16px 14px; }
+.recs.open { display: block; }
+.rec-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 9px;
+}
+.rec {
+  display: flex; flex-direction: column; text-decoration: none;
+  background: var(--bg-3); border: 1px solid var(--line);
+  border-radius: 8px; overflow: hidden;
+}
+.rec:hover { border-color: var(--accent); }
+.rec img { width: 100%; height: 92px; object-fit: cover; background: var(--bg); }
+.rec-body { padding: 8px 9px; }
+.rec-title { font-size: 12px; color: var(--text); line-height: 1.35;
+             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+             overflow: hidden; }
+.rec-meta { font-size: 10.5px; color: var(--text-3); margin-top: 3px; }
+.rec-why  { font-size: 10.5px; color: var(--accent); margin-top: 4px; }
+.rec-basis {
+  margin-top: 11px; font-size: 11px; color: var(--text-3);
+  line-height: 1.5; font-style: italic;
+}
+
 /* ---------------------------------------------------------------- results */
 
 .results { display: flex; flex-direction: column; gap: 13px; }
@@ -245,7 +372,7 @@ input[type=range]::-moz-range-thumb {
   border-radius: var(--radius); overflow: hidden;
 }
 .product-head {
-  display: flex; align-items: flex-start; justify-content: space-between;
+  display: flex; align-items: flex-start;
   gap: 14px; padding: 14px 16px; background: var(--bg-3);
   border-bottom: 1px solid var(--line);
 }

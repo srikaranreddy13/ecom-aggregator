@@ -217,7 +217,10 @@ class EntityResolver:
         # Extract once per listing. Attribute extraction is regex-heavy and the
         # veto check is O(n^2) within a block, so re-extracting per comparison
         # would dominate the runtime.
-        attributes = [attrs.extract(l.title) for l in listings]
+        # Brand is passed so the disjoint-name veto can strip it: it is the token
+        # every product from one maker shares, and leaving it in makes a Rolex
+        # Datejust look related to a Rolex Submariner.
+        attributes = [attrs.extract(l.title, l.brand) for l in listings]
 
         if self.use_blocking:
             blocks: dict[tuple, list[int]] = defaultdict(list)

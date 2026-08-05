@@ -252,6 +252,13 @@ class Attributes:
     generation: str | None
     pack_count: int | None
     size: str | None
+    # Content words left after removing the brand, colours, units, numbers and
+    # marketing noise -- i.e. the words that actually name the product line.
+    # See `conflicts_with` for why this exists.
+    distinctive: frozenset[str] = frozenset()
+    # Short model designators: {'s10'}, {'6'}, {'c35'}. The most discriminative
+    # tokens in electronics, and the ones `distinctive` throws away.
+    variants: frozenset[str] = frozenset()
 
     def conflicts_with(self, other: "Attributes") -> str | None:
         """Return the attribute that proves these are different products, or None.
@@ -274,6 +281,48 @@ class Attributes:
 
         if self.pack_count and other.pack_count and self.pack_count != other.pack_count:
             return f"pack_count ({self.pack_count} vs {other.pack_count})"
+
+        # DISAGREEING VARIANT DESIGNATORS.
+        #
+        # "iPhone 6" vs "iPhone X", "Galaxy S7" vs "Galaxy S10". Both sides name
+        # a model within a line and the models differ, so they are different
+        # products however similar the strings look. Checked before the
+        # distinctive-word rule because it is the sharper signal: these titles
+        # DO share a distinctive word ("iphone", "galaxy"), which is exactly why
+        # the weaker rule let them through.
+        if self.variants and other.variants:
+            mine_cores = {_variant_core(v) for v in self.variants}
+            their_cores = {_variant_core(v) for v in other.variants}
+            if not (mine_cores & their_cores):
+                mine = ", ".join(sorted(self.variants)[:3])
+                theirs = ", ".join(sorted(other.variants)[:3])
+                return f"variant ({mine} vs {theirs})"
+
+        # DISJOINT PRODUCT NAMES.
+        #
+        # Some product lines are distinguished by WORDS, not codes: Rolex
+        # Datejust vs Cellini vs Submariner, Galaxy Fold vs Flip. None of the
+        # checks above fire -- no differing quantity, no model code, no
+        # generation -- and TF-IDF character n-grams score "Rolex Datejust
+        # Women" against "Rolex Cellini Moonphase" as highly similar because
+        # they share the brand and the shape of the string. Three different
+        # watches merged into one product.
+        #
+        # The brand is removed before comparing, which is the whole trick: it is
+        # the token these titles share, and leaving it in makes every product
+        # from one brand look related.
+        #
+        # This fires only when there is NO shared distinctive word at all, so
+        # differently-worded listings for one product still merge as long as they
+        # agree on something ("iPhone 15" / "iPhone 15 Smartphone" share
+        # {iphone, 15}). The residual risk is a pair that names the same product
+        # with entirely disjoint vocabulary -- "iPhone 15" vs "Apple A3090" --
+        # which is rare and already hard for every other signal too.
+        if self.distinctive and other.distinctive:
+            if not (self.distinctive & other.distinctive):
+                mine = ", ".join(sorted(self.distinctive)[:3])
+                theirs = ", ".join(sorted(other.distinctive)[:3])
+                return f"no shared product name ({mine} vs {theirs})"
 
         return None
 
@@ -387,8 +436,114 @@ def extract_model_number(title: str) -> str | None:
     return max(candidates, key=len) if candidates else None
 
 
-def extract(title: str) -> Attributes:
-    """Full attribute set for one title. The single entry point."""
+# Words too generic to distinguish one product from another. A shared "watch" or
+# "shirt" says only that both are watches. Kept separate from NOISE_TOKENS
+# because these are legitimate for the embedder to see -- they just carry no
+# discriminative power for the disjoint-name veto.
+GENERIC_NOUNS = {
+    "watch", "watches", "shirt", "tshirt", "t", "shoes", "shoe", "bag", "bags",
+    "case", "cover", "laptop", "phone", "mobile", "tablet", "charger", "cable",
+    "glasses", "sunglasses", "dress", "top", "tops", "jeans", "trousers",
+    # NOTE gender words are deliberately NOT here. "Rolex Datejust" and "Rolex
+    # Datejust Women" are different products, and stripping "women" merged them.
+    "black", "white", "blue", "red", "green", "grey", "gray", "silver", "gold",
+    "edition", "series", "model", "size", "colour", "color", "pack", "set",
+    "wireless", "bluetooth", "smart", "pro", "plus", "max", "mini", "lite",
+    "ultra", "air", "classic", "sport", "sports", "leather", "cotton", "steel",
+}
+
+
+def distinctive_tokens(title: str, brand: str | None = None) -> frozenset[str]:
+    """Words that actually name the product line.
+
+    Everything non-discriminative is stripped: the brand (the token competing
+    products from one maker all share), colours, units, bare numbers, marketing
+    noise, and generic category nouns. What remains for "Rolex Cellini Moonphase"
+    is {cellini, moonphase} -- exactly the words that make it not a Datejust.
+    """
+    # Hyphens are removed BEFORE tokenising so "WH-1000XM5" and "WH1000XM5"
+    # produce the same token. Without this the two spellings of one product
+    # shared no distinctive word and looked like different items.
+    text = _QUANTITY_RE.sub(" ", title.lower().replace("-", "").replace("_", ""))
+    brand_words = {w for w in re.findall(r"[a-z0-9]+", (brand or "").lower())}
+
+    out = set()
+    for token in re.findall(r"[a-z0-9]+", text):
+        if len(token) < 3:
+            continue
+        if token in brand_words or token in NOISE_TOKENS or token in GENERIC_NOUNS:
+            continue
+        if token in BASE_COLOURS or token in MODIFIER_COLOURS:
+            continue
+        if token.isdigit():
+            continue
+        out.add(token)
+    return frozenset(out)
+
+
+# A variant designator: the short alphanumeric token that separates one model in
+# a line from the next. iPhone 6 / X / 5s, Galaxy S7 / S10, Realme C35 / XT.
+#
+# These are the MOST discriminative tokens in electronics and were being thrown
+# away by `distinctive_tokens`, which drops anything under three characters and
+# anything purely numeric. So "iPhone 6" and "iPhone X" both reduced to
+# {iphone}, shared a token, escaped the veto, and merged into one product.
+_VARIANT_RE = re.compile(r"\b([a-z]{0,2}\d{1,4}[a-z]{0,2}|[a-z]{1,3}\d{1,4})\b", re.I)
+
+
+_VARIANT_CORE_RE = re.compile(r"^[a-z]*?(\d.*)$")
+
+
+def _variant_core(token: str) -> str:
+    """Reduce a variant to the part that actually identifies the model.
+
+    REGRESSION THIS FIXES. Retailers write the same phone as "Nord CE 4" and
+    "Nord CE4", which tokenise to {'4'} and {'ce4'} -- disjoint, so the veto
+    split one real product in two and gold-set recall fell from 1.000 to 0.900.
+
+    Dropping the LEADING letters and keeping from the first digit onwards makes
+    those agree ('4' and '4') while keeping genuinely different models apart:
+
+        ce4 -> 4     4  -> 4      same model, two spellings
+        s7  -> 7     s10 -> 10    different models
+        6   -> 6     16 -> 16     different models (a naive substring test
+                                  would have wrongly matched these)
+
+    Tokens with no digit at all ("x", "xt") are returned unchanged, since there
+    is nothing to normalise.
+    """
+    m = _VARIANT_CORE_RE.match(token)
+    return m.group(1) if m else token
+
+
+def variant_tokens(title: str, brand: str | None = None) -> frozenset[str]:
+    """Short model designators, e.g. {'s10'} or {'6'} or {'c35'}.
+
+    Quantities are stripped first so "128gb" never becomes a variant. Years are
+    excluded because "iPhone 15 (2023)" and "iPhone 15" are the same phone.
+    """
+    text = _QUANTITY_RE.sub(" ", title.lower().replace("-", " "))
+    brand_words = {w for w in re.findall(r"[a-z0-9]+", (brand or "").lower())}
+
+    out = set()
+    for m in _VARIANT_RE.finditer(text):
+        token = m.group(1).lower()
+        if token in brand_words or token in NOISE_TOKENS:
+            continue
+        # A four-digit number in 1900-2100 is a model year, not a variant.
+        if token.isdigit() and 1900 <= int(token) <= 2100:
+            continue
+        out.add(token)
+    return frozenset(out)
+
+
+def extract(title: str, brand: str | None = None) -> Attributes:
+    """Full attribute set for one title. The single entry point.
+
+    `brand` is optional but improves the disjoint-name veto: without it, the
+    brand stays in the distinctive set and every product from one maker looks
+    related. Adapters know the brand, so they should pass it.
+    """
     return Attributes(
         quantities=extract_quantities(title),
         colour=extract_colour(title),
@@ -396,6 +551,8 @@ def extract(title: str) -> Attributes:
         generation=extract_generation(title),
         pack_count=extract_pack_count(title),
         size=extract_size(title),
+        distinctive=distinctive_tokens(title, brand),
+        variants=variant_tokens(title, brand),
     )
 
 

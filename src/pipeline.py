@@ -25,7 +25,9 @@ import time
 from .adapters.base import Listing, SourceAdapter
 from .adapters.errors import AdapterAuthError, AdapterError
 from .config import settings
+from .links import build_links
 from .logging_setup import get_logger
+from .matching import attributes
 from .matching.embedder import Embedder
 from .matching.resolver import EntityResolver, ProductCluster
 from .money import normalise_listings
@@ -86,7 +88,8 @@ class AggregatorPipeline:
 
     # ---------------- fetch ----------------
 
-    def fetch(self, query: str, limit_per_source: int = 25) -> list[Listing]:
+    def fetch(self, query: str, limit_per_source: int = 25,
+              category: str | None = None) -> list[Listing]:
         """Query every healthy adapter, normalise currency, record history."""
         started = time.monotonic()
         all_listings: list[Listing] = []
@@ -106,7 +109,14 @@ class AggregatorPipeline:
                 continue
 
             try:
-                got = ad.search(query, limit=limit_per_source)
+                # Category filtering is optional on the adapter interface: a
+                # live marketplace API may not expose it, and a source that
+                # cannot filter should still contribute rather than be dropped.
+                if category and "category" in getattr(ad.search, "__code__",
+                                                     type("x", (), {})()).co_varnames:
+                    got = ad.search(query, limit=limit_per_source, category=category)
+                else:
+                    got = ad.search(query, limit=limit_per_source)
             except AdapterAuthError as exc:
                 # Not retryable and not transient: stop asking.
                 self._disabled.add(ad.name)
@@ -171,14 +181,40 @@ class AggregatorPipeline:
         weights: dict[str, float] | None = None,
         limit_per_source: int = 25,
         normalisation: str = "minmax",
+        category: str | None = None,
     ) -> list[dict]:
-        listings = self.fetch(query, limit_per_source)
+        listings = self.fetch(query, limit_per_source, category=category)
         clusters = self.resolve(listings)
+
+        # The three shopper profiles, evaluated for every product alongside the
+        # user's own weights. The UI shows all three at once because the whole
+        # argument of the project is that they disagree -- making the user click
+        # three times to discover that buries the finding.
+        PROFILES = {
+            "budget": {"price": 0.80, "delivery_days": 0.10, "seller_rating": 0.10},
+            "hurry": {"price": 0.20, "delivery_days": 0.65, "seller_rating": 0.15},
+            "trust": {"price": 0.20, "delivery_days": 0.15, "seller_rating": 0.65},
+        }
 
         results = []
         for c in clusters:
             ranked = topsis(c.listings, weights, normalisation=normalisation)
             best = ranked[0]
+
+            profile_winners = {}
+            for name, profile_weights in PROFILES.items():
+                top = topsis(c.listings, profile_weights,
+                             normalisation=normalisation)[0]
+                profile_winners[name] = {
+                    "source": top.listing.source,
+                    "seller_name": top.listing.seller_name,
+                    "price": top.listing.price,
+                    "delivery_days": top.listing.delivery_days,
+                    "seller_rating": top.listing.seller_rating,
+                    "score": top.score,
+                }
+
+            first = c.listings[0]
             results.append(
                 {
                     "cluster_id": c.cluster_id,
@@ -186,6 +222,18 @@ class AggregatorPipeline:
                     "num_offers": len(c),
                     "sources": sorted({l.source for l in c.listings}),
                     "currency": self.base_currency,
+                    "image_url": next(
+                        (l.image_url for l in c.listings if l.image_url), None),
+                    "brand": first.brand,
+                    "category": (first.raw or {}).get("category"),
+                    "specs": attributes.extract(
+                        c.canonical_title, first.brand).summary(),
+                    "profiles": profile_winners,
+                    "profiles_agree": len(
+                        {p["source"] for p in profile_winners.values()}) == 1,
+                    "links": build_links(
+                        c.canonical_title, c.listings,
+                        brand=first.brand, currency=self.base_currency),
                     "price_range": [
                         min(l.price for l in c.listings),
                         max(l.price for l in c.listings),
