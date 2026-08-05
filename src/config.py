@@ -111,6 +111,13 @@ class Settings:
         default_factory=lambda: _get_opt_float("SIMILARITY_THRESHOLD")
     )
 
+    # -- catalogue (the PRODUCT dimension; see src/catalogue.py) --
+    # auto      try the live keyless API, fall back to the bundled file
+    # dummyjson  force live -- fail loudly rather than silently degrading
+    # file       force the offline fixture
+    catalogue_source: str = field(
+        default_factory=lambda: _get("CATALOGUE_SOURCE", "auto").lower())
+
     # -- money --
     # Ranking compares prices numerically, so everything is converted to this
     # currency before it reaches TOPSIS. See src/money.py.

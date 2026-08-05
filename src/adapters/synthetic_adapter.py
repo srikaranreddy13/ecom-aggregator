@@ -157,7 +157,20 @@ class SyntheticMarketAdapter(SourceAdapter):
         seed: int | None = None,
         as_of: date | None = None,
         volatility: float | None = None,
+        products=None,
     ):
+        """One simulated seller.
+
+        `products` is a list of `src.catalogue.Product`. When omitted the
+        process-wide catalogue is used -- which is the LIVE one by default, so
+        this seller offers all 194 products across 24 categories rather than a
+        handful of hardcoded phones.
+
+        That split is the point: the product dimension comes from a real remote
+        catalogue, and this class only supplies the SELLER dimension -- price,
+        delivery, rating, availability. Swap the catalogue and the same seller
+        logic covers clothing, groceries and furniture with no change here.
+        """
         if profile not in SELLER_PROFILES:
             raise ValueError(
                 f"Unknown profile {profile!r}. Choose from {sorted(SELLER_PROFILES)}"
@@ -169,15 +182,17 @@ class SyntheticMarketAdapter(SourceAdapter):
         self.volatility = (
             settings.synthetic_daily_volatility if volatility is None else volatility
         )
-        path = catalogue_path or settings.sample_data_path
-        rows = json.loads(open(path, encoding="utf-8").read())
-        # One catalogue entry per distinct product, not per source listing --
-        # this adapter IS the seller, so it lists each product once.
-        self._catalogue: dict[str, dict] = {}
-        for r in rows:
-            gold = r.get("gold_cluster") or r["source_item_id"]
-            if gold not in self._catalogue:
-                self._catalogue[gold] = r
+
+        if products is None:
+            from ..catalogue import FileCatalogue, get_catalogue
+
+            source = (FileCatalogue(catalogue_path) if catalogue_path
+                      else get_catalogue())
+            products = source.all_products()
+
+        # Keyed by product id: this adapter IS one seller, so it lists each
+        # product exactly once.
+        self._products = {p.product_id: p for p in products}
 
     # ------------------------------------------------------------ price model
 
@@ -299,34 +314,52 @@ class SyntheticMarketAdapter(SourceAdapter):
 
     # ------------------------------------------------------------ adapter API
 
-    def listings_on(self, day: date, query: str = "", limit: int = 25) -> list[Listing]:
+    def listings_on(self, day: date, query: str = "", limit: int = 25,
+                    category: str | None = None) -> list[Listing]:
         """All listings this seller offers on a given day. The time machine."""
         q = query.lower().strip()
+        tokens = q.split()
+        wanted_category = category.strip().lower() if category else None
+
         out: list[Listing] = []
-        for product_id, row in self._catalogue.items():
-            title = row["title"]
-            if q and not any(tok in title.lower() for tok in q.split()):
+        for product_id, product in self._products.items():
+            if wanted_category and (product.category or "").lower() != wanted_category:
                 continue
+            if tokens:
+                # Match across title, brand, category and tags -- not just the
+                # title. "shirt" has to find "Blue & Black Check Shirt", and
+                # "apple" has to find products whose brand is Apple but whose
+                # title never says so.
+                haystack = " ".join(filter(None, [
+                    product.title, product.brand, product.category,
+                    " ".join(product.tags),
+                ])).lower()
+                if not all(tok in haystack for tok in tokens):
+                    continue
             if not self.in_stock(product_id, day):
                 continue
+
             out.append(
                 Listing(
                     source=self.name,
                     # Stable per (seller, product) so a price series joins across days.
                     source_item_id=f"{self.name[4:]}-{product_id}",
-                    title=title,
-                    price=self.price_on(product_id, float(row["price"]), day),
-                    currency=row.get("currency", "INR"),
+                    title=product.title,
+                    price=self.price_on(product_id, product.reference_price, day),
+                    currency=product.currency,
                     delivery_days=self._delivery_days(product_id, day),
                     seller_rating=self._rating(product_id),
                     seller_name=self.profile["seller_name"],
-                    brand=row.get("brand"),
+                    brand=product.brand,
+                    image_url=product.image_url,
                     raw={
                         "synthetic": True,
                         "observed_on": day.isoformat(),
                         "product_id": product_id,
-                        "anchor_price": row["price"],
+                        "category": product.category,
+                        "anchor_price": product.reference_price,
                         "on_sale": self._sale_active(product_id, day),
+                        "catalogue_rating": product.rating,
                     },
                 )
             )
@@ -334,20 +367,37 @@ class SyntheticMarketAdapter(SourceAdapter):
                 break
         return out
 
-    def search(self, query: str, limit: int = 25) -> list[Listing]:
-        return self.listings_on(self.as_of, query, limit)
+    def search(self, query: str, limit: int = 25,
+               category: str | None = None) -> list[Listing]:
+        return self.listings_on(self.as_of, query, limit, category=category)
 
     def health(self) -> bool:
-        return bool(self._catalogue)
+        return bool(self._products)
+
+    @property
+    def categories(self) -> list[str]:
+        return sorted({p.category for p in self._products.values() if p.category})
 
 
 def synthetic_market(
     seed: int | None = None,
     as_of: date | None = None,
+    products=None,
 ) -> list[SyntheticMarketAdapter]:
-    """The full simulated market: one adapter per seller archetype."""
+    """The full simulated market: one adapter per seller archetype.
+
+    The catalogue is loaded ONCE and shared across all four sellers. Letting each
+    construct its own would fetch the live catalogue four times per process --
+    four times the latency and four times the load on a free public API for
+    identical data.
+    """
+    if products is None:
+        from ..catalogue import get_catalogue
+
+        products = get_catalogue().all_products()
+
     return [
-        SyntheticMarketAdapter(profile=p, seed=seed, as_of=as_of)
+        SyntheticMarketAdapter(profile=p, seed=seed, as_of=as_of, products=products)
         for p in SELLER_PROFILES
     ]
 

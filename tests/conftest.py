@@ -22,6 +22,12 @@ import os  # noqa: E402
 
 os.environ.setdefault("EMBEDDER_BACKEND", "tfidf")
 
+# Pin the catalogue to the bundled file. Tests must never depend on a public API
+# being reachable: a network blip would turn the whole suite red for reasons that
+# have nothing to do with the code, and CI would be non-deterministic. The live
+# path is exercised by its own tests, which skip when offline.
+os.environ.setdefault("CATALOGUE_SOURCE", "file")
+
 from src.matching.embedder import Embedder  # noqa: E402
 from src.storage import db  # noqa: E402
 
