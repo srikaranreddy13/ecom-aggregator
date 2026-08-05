@@ -61,21 +61,64 @@ def main():
     print(f"Listings          : {len(listings)}")
     print(f"Gold clusters     : {len(set(gold.values()))}\n")
 
+    # FOUR configurations, not three. The resolver has three separable
+    # components and the ablation has to isolate each:
+    #
+    #   blocking   coarse exact partition on brand + colour
+    #   embeddings semantic clustering of titles
+    #   veto       must-not-link on disagreeing extracted specifications
+    #
+    # The third row is the one that matters most now. Blocking became
+    # deliberately coarse (brand + colour, no quantities) so that listings which
+    # omit a spec are not exiled into singleton blocks. That moved ALL numeric
+    # precision into the veto -- so an ablation that bundles the veto into
+    # "hybrid" would credit blocking and embeddings for work the veto does.
+    # Row 3 minus row 4 is the veto's contribution, measured.
     configs = [
-        ("Embeddings only", dict(use_blocking=False, enforce_model_constraint=False)),
-        ("Blocking only",   dict(use_blocking=True,  similarity_threshold=-1.0, enforce_model_constraint=False)),
-        ("Hybrid (ours)",   dict(use_blocking=True)),
+        ("Embeddings only",
+         dict(use_blocking=False, enforce_model_constraint=False)),
+        ("Blocking only",
+         dict(use_blocking=True, similarity_threshold=-1.0,
+              enforce_model_constraint=False)),
+        ("Blocking + embeddings",
+         dict(use_blocking=True, enforce_model_constraint=False)),
+        ("Full hybrid (ours)",
+         dict(use_blocking=True, enforce_model_constraint=True)),
     ]
 
-    header = f"{'Configuration':<20}{'Prec':>8}{'Rec':>8}{'F1':>8}{'TP':>6}{'FP':>6}{'FN':>6}"
+    header = (f"{'Configuration':<24}{'Prec':>8}{'Rec':>8}{'F1':>8}"
+              f"{'TP':>6}{'FP':>6}{'FN':>6}{'Clusters':>10}")
     print(header)
     print("-" * len(header))
 
+    scores = {}
     for label, kw in configs:
         resolver = EntityResolver(embedder=embedder, **kw)
         clusters = resolver.resolve(listings)
         p, r, f1, tp, fp, fn = pairwise_prf(clusters, gold)
-        print(f"{label:<20}{p:>8.3f}{r:>8.3f}{f1:>8.3f}{tp:>6}{fp:>6}{fn:>6}")
+        scores[label] = f1
+        print(f"{label:<24}{p:>8.3f}{r:>8.3f}{f1:>8.3f}"
+              f"{tp:>6}{fp:>6}{fn:>6}{len(clusters):>10}")
+
+    veto_gain = scores["Full hybrid (ours)"] - scores["Blocking + embeddings"]
+    print(f"\n  Specification veto contributes {veto_gain:+.3f} F1 over "
+          f"blocking + embeddings alone.")
+    print("  That is the component that separates WH-1000XM4 from XM5, 128GB from")
+    print("  256GB, and a 750W mixer from a 500W one -- none of which blocking or")
+    print("  embeddings catch on their own.")
+
+    # Which pairs the veto actually stopped, and how similar their text was.
+    # A high text similarity here is the argument against embeddings-only:
+    # these pairs would have merged on semantics alone.
+    resolver = EntityResolver(embedder=embedder, use_blocking=True)
+    resolver.resolve(listings)
+    if resolver.last_vetoes:
+        print(f"\n  Pairs blocked by the veto ({len(resolver.last_vetoes)}), "
+              f"highest text similarity first:")
+        for v in sorted(resolver.last_vetoes,
+                        key=lambda x: -x["text_similarity"])[:8]:
+            print(f"    sim={v['text_similarity']:.3f}  {v['reason']:<28} "
+                  f"{v['a_title'][:34]} | {v['b_title'][:34]}")
 
     # threshold sweep -- gives you a figure for the paper
     print("\nThreshold sweep (hybrid):")

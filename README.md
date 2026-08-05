@@ -115,6 +115,7 @@ listing came from an API, a simulator, or a cache.
 
 | Module | Files | Status |
 |---|---|---|
+| **Domain-agnostic attribute extraction** | `src/matching/attributes.py` | **Working** |
 | Source adapters | `src/adapters/base.py`, `mock_adapter.py`, `ebay_adapter.py` | Working |
 | Synthetic market | `src/adapters/synthetic_adapter.py` | Working |
 | HTTP resilience (retry, rate limit) | `src/adapters/http.py`, `errors.py` | Working |
@@ -164,20 +165,40 @@ visible in the response, not only in the logs.
 ### Result 1 — Entity resolution ablation
 
 Pairwise precision/recall/F1 against hand-labelled clusters
-(`python -m scripts.evaluate_matching`):
+(`python -m scripts.evaluate_matching`). The resolver has **three** separable
+components, so the ablation isolates each:
 
 | Configuration | Precision | Recall | F1 |
 |---|---|---|---|
 | Embeddings only | 0.556 | 1.000 | 0.714 |
-| Blocking only | 0.833 | 1.000 | 0.909 |
-| **Hybrid (ours)** | **1.000** | **1.000** | **1.000** |
+| Blocking only | 0.556 | 1.000 | 0.714 |
+| Blocking + embeddings | 0.556 | 1.000 | 0.714 |
+| **Full hybrid (+ specification veto)** | **1.000** | **1.000** | **1.000** |
+
+**The specification veto contributes the entire +0.286 F1.** Blocking and
+embeddings together add nothing over either alone on this set — which is a more
+precise finding than the earlier three-row version of this table, and it
+correctly attributes the credit.
 
 **Why embeddings alone fail.** "iPhone 15 128GB Blue" and "iPhone 15 256GB Blue"
-are ~0.97 cosine similar but are different products. Embeddings capture topic,
-not specification. Hard attributes must be enforced as constraints, not learned.
+are near-identical as text. Embeddings capture topic, not specification. Hard
+attributes must be enforced as constraints, not learned.
 
 **Why blocking alone fails.** Rules cannot handle reordered, abbreviated or
 paraphrased titles ("Galaxy S24 5G 256 GB Black Samsung").
+
+**Why blocking is deliberately weak here.** Blocking partitions on
+`brand + colour` only — no quantities. Block keys must match *exactly*, so every
+field added multiplies the chance that a listing which merely *omits* that field
+is exiled into a singleton block, where semantic clustering never runs and recall
+silently collapses. All numeric precision therefore lives in the veto, which stays
+silent when a spec is missing. That trade is why the earlier version of this table
+showed blocking alone at 0.909 and this one shows 0.714 — the strength moved, it
+did not vanish.
+
+The script also prints exactly which pairs the veto stopped and how similar their
+text was. The XM4/XM5 pair sits at 0.625 cosine similarity — it *would* have
+merged on semantics alone.
 
 Three extraction bugs found during development, all preserved as regression tests:
 

@@ -1,0 +1,807 @@
+{
+  "_comment": [
+    "Product catalogue. This is the PRODUCT dimension of the system: one entry per",
+    "distinct physical product. Sellers/listings are a separate concern -- adapters",
+    "generate listings from these entries (see src/adapters/synthetic_adapter.py),",
+    "and a live adapter such as eBay bypasses this file entirely.",
+    "",
+    "WHY THIS FILE REPLACED sample_listings.json AS THE SOURCE OF TRUTH.",
+    "The old file was a flat list of 15 listings for 7 products, all electronics.",
+    "That made 'browse any product' impossible and made attribute extraction look",
+    "more general than it was -- storage/colour happen to describe a phone but say",
+    "nothing about a mixer grinder or a laptop.",
+    "",
+    "FIELDS",
+    "  product_id     stable identity. Also the gold cluster label for evaluation.",
+    "  category       drives which attribute extractors apply. See src/matching/categories.py",
+    "  attributes     the hard specs. Two products differing on any of these are",
+    "                 DIFFERENT products and must never merge.",
+    "  mrp            anchor price in INR. Seller prices are derived from this.",
+    "  search_terms   what to put in a retailer search URL. See src/links.py",
+    "  complements    products genuinely bought alongside this one. Feeds the",
+    "                 recommender's complement rules -- this is what makes",
+    "                 'customers also bought' relevant rather than random.",
+    "  title_variants how different sellers word the same product. This is the",
+    "                 entity-resolution test set: reordering, abbreviation,",
+    "                 marketing noise and casing all have to collapse to one cluster.",
+    "",
+    "Prices are indicative Indian-market figures, not live quotes."
+  ],
+
+  "categories": {
+    "smartphone":  {"label": "Smartphones",        "key_attributes": ["storage_gb", "colour", "ram_gb"]},
+    "laptop":      {"label": "Laptops",            "key_attributes": ["storage_gb", "ram_gb", "screen_in", "cpu"]},
+    "audio":       {"label": "Audio",              "key_attributes": ["colour", "model_number", "generation"]},
+    "wearable":    {"label": "Wearables & Tablets","key_attributes": ["storage_gb", "colour", "size_mm", "generation"]},
+    "kitchen":     {"label": "Kitchen Appliances", "key_attributes": ["capacity_l", "wattage", "colour"]},
+    "household":   {"label": "Household",          "key_attributes": ["capacity_l", "wattage", "pack_count"]},
+    "accessory":   {"label": "Accessories",        "key_attributes": ["colour", "capacity_mah", "pack_count"]}
+  },
+
+  "products": [
+    {
+      "product_id": "iphone-15-128-blue",
+      "category": "smartphone", "brand": "Apple",
+      "name": "Apple iPhone 15 (128GB, Blue)",
+      "attributes": {"storage_gb": 128, "colour": "blue"},
+      "mrp": 66999, "search_terms": "Apple iPhone 15 128GB Blue",
+      "complements": ["case-iphone-15", "charger-20w-usbc", "airpods-pro-2", "powerbank-20000"],
+      "title_variants": [
+        "APPLE iPhone 15 128 GB Blue Smartphone",
+        "iPhone 15 - 128GB - Blue (Unlocked)",
+        "Apple iPhone 15 5G 128GB Blue Dual SIM"
+      ]
+    },
+    {
+      "product_id": "iphone-15-256-blue",
+      "category": "smartphone", "brand": "Apple",
+      "name": "Apple iPhone 15 (256GB, Blue)",
+      "attributes": {"storage_gb": 256, "colour": "blue"},
+      "mrp": 76999, "search_terms": "Apple iPhone 15 256GB Blue",
+      "complements": ["case-iphone-15", "charger-20w-usbc", "airpods-pro-2"],
+      "title_variants": [
+        "Apple iPhone 15 256GB Blue",
+        "iPhone 15 256 GB Blue Unlocked Apple"
+      ]
+    },
+    {
+      "product_id": "iphone-15-pro-256-titanium",
+      "category": "smartphone", "brand": "Apple",
+      "name": "Apple iPhone 15 Pro (256GB, Natural Titanium)",
+      "attributes": {"storage_gb": 256, "colour": "titanium"},
+      "mrp": 134900, "search_terms": "Apple iPhone 15 Pro 256GB Natural Titanium",
+      "complements": ["case-iphone-15", "charger-20w-usbc", "airpods-pro-2", "watch-se-44"],
+      "title_variants": [
+        "APPLE iPhone 15 Pro 256 GB Natural Titanium",
+        "iPhone 15 Pro 256GB Titanium Unlocked"
+      ]
+    },
+    {
+      "product_id": "s24-256-black",
+      "category": "smartphone", "brand": "Samsung",
+      "name": "Samsung Galaxy S24 5G (Onyx Black, 256 GB)",
+      "attributes": {"storage_gb": 256, "colour": "black", "ram_gb": 8},
+      "mrp": 74999, "search_terms": "Samsung Galaxy S24 5G 256GB Onyx Black",
+      "complements": ["case-galaxy-s24", "charger-45w-usbc", "buds3-pro", "powerbank-20000"],
+      "title_variants": [
+        "SAMSUNG Galaxy S24 256GB Onyx Black Dual SIM",
+        "Galaxy S24 5G 256 GB Black Samsung",
+        "Samsung Galaxy S24 (8GB RAM, 256GB, Onyx Black)"
+      ]
+    },
+    {
+      "product_id": "s24-ultra-512-grey",
+      "category": "smartphone", "brand": "Samsung",
+      "name": "Samsung Galaxy S24 Ultra 5G (Titanium Grey, 512 GB)",
+      "attributes": {"storage_gb": 512, "colour": "grey", "ram_gb": 12},
+      "mrp": 139999, "search_terms": "Samsung Galaxy S24 Ultra 512GB Titanium Grey",
+      "complements": ["case-galaxy-s24", "charger-45w-usbc", "buds3-pro"],
+      "title_variants": [
+        "SAMSUNG Galaxy S24 Ultra 512 GB Titanium Grey",
+        "Galaxy S24 Ultra 5G 512GB Grey 12GB RAM"
+      ]
+    },
+    {
+      "product_id": "nord-ce4-lite-128",
+      "category": "smartphone", "brand": "OnePlus",
+      "name": "OnePlus Nord CE 4 Lite 5G (Super Silver, 128GB)",
+      "attributes": {"storage_gb": 128, "colour": "silver", "ram_gb": 8},
+      "mrp": 19999, "search_terms": "OnePlus Nord CE 4 Lite 5G 128GB Super Silver",
+      "complements": ["charger-45w-usbc", "powerbank-20000", "buds3-pro"],
+      "title_variants": [
+        "OnePlus Nord CE4 Lite 5G 128 GB Super Silver",
+        "OnePlus Nord CE 4 Lite 128GB Silver 8GB RAM"
+      ]
+    },
+    {
+      "product_id": "redmi-note13-256-black",
+      "category": "smartphone", "brand": "Redmi",
+      "name": "Redmi Note 13 Pro 5G (Midnight Black, 256GB)",
+      "attributes": {"storage_gb": 256, "colour": "black", "ram_gb": 8},
+      "mrp": 24999, "search_terms": "Redmi Note 13 Pro 5G 256GB Midnight Black",
+      "complements": ["charger-45w-usbc", "powerbank-20000", "screenguard-universal"],
+      "title_variants": [
+        "REDMI Note 13 Pro 5G 256 GB Midnight Black",
+        "Redmi Note 13 Pro 256GB Black 8GB RAM 5G"
+      ]
+    },
+    {
+      "product_id": "pixel-8a-128-blue",
+      "category": "smartphone", "brand": "Google",
+      "name": "Google Pixel 8a (Bay Blue, 128GB)",
+      "attributes": {"storage_gb": 128, "colour": "blue"},
+      "mrp": 52999, "search_terms": "Google Pixel 8a 128GB Bay Blue",
+      "complements": ["charger-20w-usbc", "powerbank-20000", "buds3-pro"],
+      "title_variants": [
+        "GOOGLE Pixel 8a 128 GB Bay Blue",
+        "Pixel 8a 128GB Blue Google Unlocked"
+      ]
+    },
+
+    {
+      "product_id": "macbook-air-m3-13-256",
+      "category": "laptop", "brand": "Apple",
+      "name": "Apple MacBook Air 13-inch M3 (8GB RAM, 256GB SSD, Midnight)",
+      "attributes": {"storage_gb": 256, "ram_gb": 8, "screen_in": 13.6, "cpu": "m3", "colour": "midnight"},
+      "mrp": 114900, "search_terms": "Apple MacBook Air 13 M3 8GB 256GB Midnight",
+      "complements": ["backpack-laptop-15", "mouse-wireless", "ssd-external-1tb", "laptop-stand"],
+      "title_variants": [
+        "APPLE MacBook Air M3 13.6 inch 8GB 256GB SSD Midnight",
+        "MacBook Air 13\" M3 256GB 8GB Midnight Apple 2024"
+      ]
+    },
+    {
+      "product_id": "macbook-air-m3-13-512",
+      "category": "laptop", "brand": "Apple",
+      "name": "Apple MacBook Air 13-inch M3 (16GB RAM, 512GB SSD, Midnight)",
+      "attributes": {"storage_gb": 512, "ram_gb": 16, "screen_in": 13.6, "cpu": "m3", "colour": "midnight"},
+      "mrp": 149900, "search_terms": "Apple MacBook Air 13 M3 16GB 512GB Midnight",
+      "complements": ["backpack-laptop-15", "mouse-wireless", "ssd-external-1tb", "laptop-stand"],
+      "title_variants": [
+        "APPLE MacBook Air M3 13.6 16GB 512GB SSD Midnight",
+        "MacBook Air 13 inch M3 512GB 16GB RAM Midnight"
+      ]
+    },
+    {
+      "product_id": "thinkpad-e14-512-16",
+      "category": "laptop", "brand": "Lenovo",
+      "name": "Lenovo ThinkPad E14 Gen 5 (16GB RAM, 512GB SSD, i5, Black)",
+      "attributes": {"storage_gb": 512, "ram_gb": 16, "screen_in": 14.0, "cpu": "i5", "colour": "black", "generation": "5"},
+      "mrp": 78990, "search_terms": "Lenovo ThinkPad E14 Gen 5 16GB 512GB i5",
+      "complements": ["backpack-laptop-15", "mouse-wireless", "ssd-external-1tb", "laptop-stand"],
+      "title_variants": [
+        "LENOVO ThinkPad E14 Gen 5 Intel i5 16GB 512GB SSD Black",
+        "ThinkPad E14 G5 14 inch i5 16 GB 512 GB Lenovo"
+      ]
+    },
+    {
+      "product_id": "hp-pavilion-15-512-16",
+      "category": "laptop", "brand": "HP",
+      "name": "HP Pavilion 15 (16GB RAM, 512GB SSD, Ryzen 5, Silver)",
+      "attributes": {"storage_gb": 512, "ram_gb": 16, "screen_in": 15.6, "cpu": "ryzen5", "colour": "silver"},
+      "mrp": 62990, "search_terms": "HP Pavilion 15 16GB 512GB Ryzen 5 Silver",
+      "complements": ["backpack-laptop-15", "mouse-wireless", "ssd-external-1tb"],
+      "title_variants": [
+        "HP Pavilion 15.6 inch Ryzen 5 16GB 512GB SSD Natural Silver",
+        "Pavilion 15 Laptop AMD Ryzen 5 16 GB RAM 512 GB SSD HP"
+      ]
+    },
+    {
+      "product_id": "dell-inspiron-14-512-8",
+      "category": "laptop", "brand": "Dell",
+      "name": "Dell Inspiron 14 (8GB RAM, 512GB SSD, i5, Carbon Black)",
+      "attributes": {"storage_gb": 512, "ram_gb": 8, "screen_in": 14.0, "cpu": "i5", "colour": "black"},
+      "mrp": 54990, "search_terms": "Dell Inspiron 14 8GB 512GB i5 Carbon Black",
+      "complements": ["backpack-laptop-15", "mouse-wireless", "laptop-stand"],
+      "title_variants": [
+        "DELL Inspiron 14 Intel i5 8GB 512GB SSD Carbon Black",
+        "Inspiron 14 inch Laptop i5 8 GB 512 GB Dell Black"
+      ]
+    },
+    {
+      "product_id": "asus-vivobook-16-1tb-16",
+      "category": "laptop", "brand": "ASUS",
+      "name": "ASUS Vivobook 16 (16GB RAM, 1TB SSD, i7, Cool Silver)",
+      "attributes": {"storage_gb": 1024, "ram_gb": 16, "screen_in": 16.0, "cpu": "i7", "colour": "silver"},
+      "mrp": 84990, "search_terms": "ASUS Vivobook 16 16GB 1TB i7 Cool Silver",
+      "complements": ["backpack-laptop-15", "mouse-wireless", "ssd-external-1tb", "laptop-stand"],
+      "title_variants": [
+        "ASUS Vivobook 16 Intel i7 16GB 1TB SSD Cool Silver",
+        "Vivobook 16 inch i7 16 GB 1 TB SSD ASUS Silver"
+      ]
+    },
+    {
+      "product_id": "acer-aspire-lite-256-8",
+      "category": "laptop", "brand": "Acer",
+      "name": "Acer Aspire Lite 14 (8GB RAM, 256GB SSD, i3, Steel Grey)",
+      "attributes": {"storage_gb": 256, "ram_gb": 8, "screen_in": 14.0, "cpu": "i3", "colour": "grey"},
+      "mrp": 32990, "search_terms": "Acer Aspire Lite 14 8GB 256GB i3 Steel Grey",
+      "complements": ["backpack-laptop-15", "mouse-wireless"],
+      "title_variants": [
+        "ACER Aspire Lite 14 Intel i3 8GB 256GB SSD Steel Grey",
+        "Aspire Lite 14 inch i3 8 GB 256 GB Acer Grey"
+      ]
+    },
+
+    {
+      "product_id": "sony-xm5-black",
+      "category": "audio", "brand": "Sony",
+      "name": "Sony WH-1000XM5 Wireless Noise Cancelling Headphones, Black",
+      "attributes": {"colour": "black", "model_number": "wh1000xm5"},
+      "mrp": 26990, "search_terms": "Sony WH-1000XM5 Wireless Noise Cancelling Headphones Black",
+      "complements": ["case-headphone", "aux-cable-35", "powerbank-20000"],
+      "title_variants": [
+        "Sony WH1000XM5 Bluetooth Headphone Black Noise Cancellation",
+        "SONY WH-1000XM5 Over Ear Wireless Headphones Black"
+      ]
+    },
+    {
+      "product_id": "sony-xm4-black",
+      "category": "audio", "brand": "Sony",
+      "name": "Sony WH-1000XM4 Wireless Headphones Black",
+      "attributes": {"colour": "black", "model_number": "wh1000xm4"},
+      "mrp": 19990, "search_terms": "Sony WH-1000XM4 Wireless Headphones Black",
+      "complements": ["case-headphone", "aux-cable-35"],
+      "title_variants": [
+        "SONY WH1000XM4 Noise Cancelling Bluetooth Headphones Black",
+        "Sony WH-1000XM4 Over Ear Headphone Black Wireless"
+      ]
+    },
+    {
+      "product_id": "airpods-pro-2",
+      "category": "audio", "brand": "Apple",
+      "name": "Apple AirPods Pro (2nd Generation) with MagSafe Case USB-C",
+      "attributes": {"colour": "white", "generation": "2"},
+      "mrp": 21900, "search_terms": "Apple AirPods Pro 2nd Generation USB-C",
+      "complements": ["case-airpods", "charger-20w-usbc", "iphone-15-128-blue"],
+      "title_variants": [
+        "AirPods Pro 2nd Gen USB C MagSafe Charging Case Apple",
+        "APPLE AirPods Pro 2 Generation Wireless Earbuds White"
+      ]
+    },
+    {
+      "product_id": "airpods-pro-3",
+      "category": "audio", "brand": "Apple",
+      "name": "Apple AirPods Pro (3rd Generation) with MagSafe Case",
+      "attributes": {"colour": "white", "generation": "3"},
+      "mrp": 26900, "search_terms": "Apple AirPods Pro 3rd Generation",
+      "complements": ["case-airpods", "charger-20w-usbc"],
+      "title_variants": [
+        "AirPods Pro 3rd Gen MagSafe Charging Case Apple",
+        "APPLE AirPods Pro 3 Generation Wireless Earbuds White"
+      ]
+    },
+    {
+      "product_id": "buds3-pro",
+      "category": "audio", "brand": "Samsung",
+      "name": "Samsung Galaxy Buds3 Pro (Silver)",
+      "attributes": {"colour": "silver", "generation": "3"},
+      "mrp": 19999, "search_terms": "Samsung Galaxy Buds3 Pro Silver",
+      "complements": ["s24-256-black", "case-earbuds", "charger-45w-usbc"],
+      "title_variants": [
+        "SAMSUNG Galaxy Buds3 Pro Wireless Earbuds Silver",
+        "Galaxy Buds 3 Pro Silver Samsung ANC Earbuds"
+      ]
+    },
+    {
+      "product_id": "boat-rockerz-550-black",
+      "category": "audio", "brand": "boAt",
+      "name": "boAt Rockerz 550 Bluetooth Headphones (Black)",
+      "attributes": {"colour": "black", "model_number": "rockerz550"},
+      "mrp": 1999, "search_terms": "boAt Rockerz 550 Bluetooth Headphones Black",
+      "complements": ["aux-cable-35", "powerbank-20000"],
+      "title_variants": [
+        "boAt Rockerz 550 Over Ear Wireless Headphone Black",
+        "BOAT Rockerz550 Bluetooth Headphones Black 50H Playback"
+      ]
+    },
+
+    {
+      "product_id": "watch-se-44",
+      "category": "wearable", "brand": "Apple",
+      "name": "Apple Watch SE (2nd Gen, 44mm, Midnight Aluminium)",
+      "attributes": {"size_mm": 44, "colour": "midnight", "generation": "2"},
+      "mrp": 29900, "search_terms": "Apple Watch SE 2nd Gen 44mm Midnight",
+      "complements": ["watch-strap-44", "charger-20w-usbc", "iphone-15-128-blue"],
+      "title_variants": [
+        "APPLE Watch SE 2 Gen 44 mm Midnight Aluminium GPS",
+        "Apple Watch SE 44mm Midnight 2nd Generation Smartwatch"
+      ]
+    },
+    {
+      "product_id": "ipad-10-64-silver",
+      "category": "wearable", "brand": "Apple",
+      "name": "Apple iPad (10th Generation, 64GB, Wi-Fi, Silver)",
+      "attributes": {"storage_gb": 64, "colour": "silver", "generation": "10", "screen_in": 10.9},
+      "mrp": 34900, "search_terms": "Apple iPad 10th Generation 64GB WiFi Silver",
+      "complements": ["case-ipad-10", "charger-20w-usbc", "airpods-pro-2"],
+      "title_variants": [
+        "APPLE iPad 10 Generation 64 GB WiFi Silver 10.9 inch",
+        "iPad 10th Gen 64GB Wi-Fi Silver Apple Tablet"
+      ]
+    },
+    {
+      "product_id": "tab-a9-128-grey",
+      "category": "wearable", "brand": "Samsung",
+      "name": "Samsung Galaxy Tab A9+ (128GB, Wi-Fi, Graphite)",
+      "attributes": {"storage_gb": 128, "colour": "graphite", "screen_in": 11.0},
+      "mrp": 21999, "search_terms": "Samsung Galaxy Tab A9 Plus 128GB WiFi Graphite",
+      "complements": ["case-tab-a9", "charger-45w-usbc"],
+      "title_variants": [
+        "SAMSUNG Galaxy Tab A9+ 128 GB WiFi Graphite 11 inch",
+        "Galaxy Tab A9 Plus 128GB Wi-Fi Graphite Samsung Tablet"
+      ]
+    },
+    {
+      "product_id": "noise-colorfit-pro5",
+      "category": "wearable", "brand": "Noise",
+      "name": "Noise ColorFit Pro 5 Smart Watch (Jet Black)",
+      "attributes": {"colour": "black", "generation": "5", "size_mm": 46},
+      "mrp": 3499, "search_terms": "Noise ColorFit Pro 5 Smart Watch Jet Black",
+      "complements": ["watch-strap-44", "powerbank-20000"],
+      "title_variants": [
+        "NOISE ColorFit Pro 5 Smartwatch Jet Black 1.85 inch",
+        "Noise ColorFit Pro5 Bluetooth Calling Smart Watch Black"
+      ]
+    },
+
+    {
+      "product_id": "mixer-philips-750w",
+      "category": "kitchen", "brand": "Philips",
+      "name": "Philips HL7756 Mixer Grinder 750W (White, 3 Jars)",
+      "attributes": {"wattage": 750, "colour": "white", "model_number": "hl7756"},
+      "mrp": 4499, "search_terms": "Philips HL7756 Mixer Grinder 750W 3 Jars White",
+      "complements": ["kettle-prestige-15l", "cookware-set-3pc", "dishwash-refill-2l"],
+      "title_variants": [
+        "PHILIPS HL7756 750 W Mixer Grinder 3 Jars White",
+        "Philips Mixer Grinder HL7756 750 Watt White 3 Jar Set"
+      ]
+    },
+    {
+      "product_id": "mixer-philips-500w",
+      "category": "kitchen", "brand": "Philips",
+      "name": "Philips HL7699 Mixer Grinder 500W (White, 3 Jars)",
+      "attributes": {"wattage": 500, "colour": "white", "model_number": "hl7699"},
+      "mrp": 3299, "search_terms": "Philips HL7699 Mixer Grinder 500W 3 Jars White",
+      "complements": ["kettle-prestige-15l", "cookware-set-3pc"],
+      "title_variants": [
+        "PHILIPS HL7699 500 W Mixer Grinder 3 Jars White",
+        "Philips Mixer Grinder 500 Watt HL7699 White"
+      ]
+    },
+    {
+      "product_id": "kettle-prestige-15l",
+      "category": "kitchen", "brand": "Prestige",
+      "name": "Prestige PKOSS Electric Kettle 1.5 L (Steel, 1500W)",
+      "attributes": {"capacity_l": 1.5, "wattage": 1500, "colour": "silver"},
+      "mrp": 1295, "search_terms": "Prestige PKOSS Electric Kettle 1.5 L Steel",
+      "complements": ["mixer-philips-750w", "cookware-set-3pc"],
+      "title_variants": [
+        "PRESTIGE PKOSS 1.5 L Electric Kettle Stainless Steel 1500W",
+        "Prestige Electric Kettle 1.5 Litre Steel PKOSS"
+      ]
+    },
+    {
+      "product_id": "airfryer-philips-42l",
+      "category": "kitchen", "brand": "Philips",
+      "name": "Philips Air Fryer HD9252 4.1 L (Black, 1400W)",
+      "attributes": {"capacity_l": 4.1, "wattage": 1400, "colour": "black", "model_number": "hd9252"},
+      "mrp": 9999, "search_terms": "Philips Air Fryer HD9252 4.1 L Black",
+      "complements": ["cookware-set-3pc", "kettle-prestige-15l"],
+      "title_variants": [
+        "PHILIPS HD9252 Air Fryer 4.1 L Black 1400 W",
+        "Philips Airfryer 4.1 Litre HD9252 Black Rapid Air"
+      ]
+    },
+    {
+      "product_id": "microwave-ifb-20l",
+      "category": "kitchen", "brand": "IFB",
+      "name": "IFB 20 L Convection Microwave Oven (Black, 1200W)",
+      "attributes": {"capacity_l": 20, "wattage": 1200, "colour": "black"},
+      "mrp": 11490, "search_terms": "IFB 20 L Convection Microwave Oven Black",
+      "complements": ["cookware-set-3pc", "airfryer-philips-42l"],
+      "title_variants": [
+        "IFB 20 Litre Convection Microwave Oven Black 1200 W",
+        "IFB Microwave Oven 20 L Convection Black"
+      ]
+    },
+    {
+      "product_id": "cookware-set-3pc",
+      "category": "kitchen", "brand": "Hawkins",
+      "name": "Hawkins Futura Non-Stick Cookware Set (3 Pieces, Black)",
+      "attributes": {"pack_count": 3, "colour": "black"},
+      "mrp": 3450, "search_terms": "Hawkins Futura Non-Stick Cookware Set 3 Pieces",
+      "complements": ["mixer-philips-750w", "dishwash-refill-2l", "airfryer-philips-42l"],
+      "title_variants": [
+        "HAWKINS Futura Non Stick Cookware Set 3 Pcs Black",
+        "Hawkins Futura 3 Piece Nonstick Cookware Set Black"
+      ]
+    },
+    {
+      "product_id": "blender-bosch-600w",
+      "category": "kitchen", "brand": "Bosch",
+      "name": "Bosch TrueMixx Blender 600W (White, 2 Jars)",
+      "attributes": {"wattage": 600, "colour": "white", "pack_count": 2},
+      "mrp": 5490, "search_terms": "Bosch TrueMixx Blender 600W 2 Jars White",
+      "complements": ["kettle-prestige-15l", "cookware-set-3pc"],
+      "title_variants": [
+        "BOSCH TrueMixx 600 W Blender 2 Jars White",
+        "Bosch Blender TrueMixx 600 Watt White 2 Jar"
+      ]
+    },
+    {
+      "product_id": "ricecooker-panasonic-18l",
+      "category": "kitchen", "brand": "Panasonic",
+      "name": "Panasonic SR-WA18 Electric Rice Cooker 1.8 L (White, 660W)",
+      "attributes": {"capacity_l": 1.8, "wattage": 660, "colour": "white", "model_number": "srwa18"},
+      "mrp": 2790, "search_terms": "Panasonic SR-WA18 Electric Rice Cooker 1.8 L",
+      "complements": ["cookware-set-3pc", "mixer-philips-750w"],
+      "title_variants": [
+        "PANASONIC SR-WA18 1.8 L Electric Rice Cooker White 660W",
+        "Panasonic Rice Cooker 1.8 Litre SRWA18 White"
+      ]
+    },
+
+    {
+      "product_id": "vacuum-eureka-1200w",
+      "category": "household", "brand": "Eureka Forbes",
+      "name": "Eureka Forbes Quick Clean DX Vacuum Cleaner 1200W (Blue)",
+      "attributes": {"wattage": 1200, "colour": "blue"},
+      "mrp": 4499, "search_terms": "Eureka Forbes Quick Clean DX Vacuum Cleaner 1200W",
+      "complements": ["vacuum-bags-pack5", "floorcleaner-refill-2l", "mop-spin-bucket"],
+      "title_variants": [
+        "EUREKA FORBES Quick Clean DX 1200 W Vacuum Cleaner Blue",
+        "Eureka Forbes Vacuum Cleaner Quick Clean DX 1200W Blue"
+      ]
+    },
+    {
+      "product_id": "waterpurifier-aquaguard-7l",
+      "category": "household", "brand": "Aquaguard",
+      "name": "Aquaguard Marvel NXT RO+UV Water Purifier 7 L (Black)",
+      "attributes": {"capacity_l": 7, "colour": "black"},
+      "mrp": 15999, "search_terms": "Aquaguard Marvel NXT RO UV Water Purifier 7 L",
+      "complements": ["purifier-filter-kit", "kettle-prestige-15l"],
+      "title_variants": [
+        "AQUAGUARD Marvel NXT 7 L RO + UV Water Purifier Black",
+        "Aquaguard Water Purifier Marvel NXT RO UV 7 Litre Black"
+      ]
+    },
+    {
+      "product_id": "fan-atomberg-1200mm",
+      "category": "household", "brand": "Atomberg",
+      "name": "Atomberg Renesa 1200mm BLDC Ceiling Fan (Matte Black, 28W)",
+      "attributes": {"wattage": 28, "colour": "black", "size_mm": 1200},
+      "mrp": 3999, "search_terms": "Atomberg Renesa 1200mm BLDC Ceiling Fan Matte Black",
+      "complements": ["led-bulb-pack4", "extension-board-6"],
+      "title_variants": [
+        "ATOMBERG Renesa 1200 mm BLDC Ceiling Fan Matte Black 28W",
+        "Atomberg Renesa BLDC Fan 1200mm Black Remote"
+      ]
+    },
+    {
+      "product_id": "iron-philips-1200w",
+      "category": "household", "brand": "Philips",
+      "name": "Philips GC1905 Steam Iron 1440W (Blue)",
+      "attributes": {"wattage": 1440, "colour": "blue", "model_number": "gc1905"},
+      "mrp": 1799, "search_terms": "Philips GC1905 Steam Iron 1440W Blue",
+      "complements": ["ironing-board", "detergent-refill-3kg"],
+      "title_variants": [
+        "PHILIPS GC1905 1440 W Steam Iron Blue",
+        "Philips Steam Iron GC1905 1440 Watt Blue"
+      ]
+    },
+    {
+      "product_id": "mop-spin-bucket",
+      "category": "household", "brand": "Scotch-Brite",
+      "name": "Scotch-Brite Spin Mop with Bucket (Red, 2 Refills)",
+      "attributes": {"colour": "red", "pack_count": 2},
+      "mrp": 1899, "search_terms": "Scotch-Brite Spin Mop Bucket Red 2 Refills",
+      "complements": ["floorcleaner-refill-2l", "vacuum-eureka-1200w"],
+      "title_variants": [
+        "SCOTCH BRITE Spin Mop with Bucket Red 2 Refills",
+        "Scotch-Brite Jumper Spin Mop Bucket Set Red"
+      ]
+    },
+    {
+      "product_id": "floorcleaner-refill-2l",
+      "category": "household", "brand": "Lizol",
+      "name": "Lizol Disinfectant Floor Cleaner 2 L (Citrus)",
+      "attributes": {"capacity_l": 2, "pack_count": 1},
+      "mrp": 385, "search_terms": "Lizol Disinfectant Floor Cleaner 2 L Citrus",
+      "complements": ["mop-spin-bucket", "dishwash-refill-2l"],
+      "title_variants": [
+        "LIZOL Disinfectant Surface Floor Cleaner 2 L Citrus",
+        "Lizol Floor Cleaner Citrus 2 Litre Disinfectant"
+      ]
+    },
+    {
+      "product_id": "dishwash-refill-2l",
+      "category": "household", "brand": "Vim",
+      "name": "Vim Dishwash Liquid Gel Refill 2 L (Lemon)",
+      "attributes": {"capacity_l": 2, "pack_count": 1},
+      "mrp": 329, "search_terms": "Vim Dishwash Liquid Gel Refill 2 L Lemon",
+      "complements": ["floorcleaner-refill-2l", "cookware-set-3pc"],
+      "title_variants": [
+        "VIM Dishwash Liquid Gel Refill Pouch 2 L Lemon",
+        "Vim Lemon Dishwashing Liquid 2 Litre Refill"
+      ]
+    },
+    {
+      "product_id": "detergent-refill-3kg",
+      "category": "household", "brand": "Surf Excel",
+      "name": "Surf Excel Matic Front Load Detergent Powder 3 kg",
+      "attributes": {"pack_count": 1},
+      "mrp": 699, "search_terms": "Surf Excel Matic Front Load Detergent Powder 3 kg",
+      "complements": ["iron-philips-1200w", "floorcleaner-refill-2l"],
+      "title_variants": [
+        "SURF EXCEL Matic Front Load Detergent Powder 3 Kg",
+        "Surf Excel Matic Front Load Washing Powder 3kg"
+      ]
+    },
+    {
+      "product_id": "led-bulb-pack4",
+      "category": "household", "brand": "Philips",
+      "name": "Philips 9W LED Bulb Cool Daylight (Pack of 4)",
+      "attributes": {"wattage": 9, "pack_count": 4, "colour": "white"},
+      "mrp": 499, "search_terms": "Philips 9W LED Bulb Cool Daylight Pack of 4",
+      "complements": ["fan-atomberg-1200mm", "extension-board-6"],
+      "title_variants": [
+        "PHILIPS 9 W LED Bulb Cool Day Light Pack of 4 B22",
+        "Philips LED Bulb 9W Cool Daylight 4 Pack"
+      ]
+    },
+
+    {
+      "product_id": "case-iphone-15",
+      "category": "accessory", "brand": "Spigen",
+      "name": "Spigen Liquid Air Case for iPhone 15 (Matte Black)",
+      "attributes": {"colour": "black", "pack_count": 1},
+      "mrp": 1499, "search_terms": "Spigen Liquid Air Case iPhone 15 Matte Black",
+      "complements": ["iphone-15-128-blue", "screenguard-universal", "charger-20w-usbc"],
+      "title_variants": [
+        "SPIGEN Liquid Air Back Cover Case for iPhone 15 Matte Black",
+        "Spigen iPhone 15 Case Liquid Air Matte Black Cover"
+      ]
+    },
+    {
+      "product_id": "case-galaxy-s24",
+      "category": "accessory", "brand": "Spigen",
+      "name": "Spigen Tough Armor Case for Galaxy S24 (Gunmetal)",
+      "attributes": {"colour": "grey", "pack_count": 1},
+      "mrp": 1799, "search_terms": "Spigen Tough Armor Case Galaxy S24 Gunmetal",
+      "complements": ["s24-256-black", "screenguard-universal", "charger-45w-usbc"],
+      "title_variants": [
+        "SPIGEN Tough Armor Back Cover for Samsung Galaxy S24 Gunmetal",
+        "Spigen Galaxy S24 Tough Armor Case Gunmetal Grey"
+      ]
+    },
+    {
+      "product_id": "charger-20w-usbc",
+      "category": "accessory", "brand": "Apple",
+      "name": "Apple 20W USB-C Power Adapter",
+      "attributes": {"wattage": 20, "colour": "white", "pack_count": 1},
+      "mrp": 1900, "search_terms": "Apple 20W USB-C Power Adapter",
+      "complements": ["iphone-15-128-blue", "airpods-pro-2", "ipad-10-64-silver"],
+      "title_variants": [
+        "APPLE 20 W USB-C Power Adapter Charger White",
+        "Apple 20W Type C Fast Charger Adapter"
+      ]
+    },
+    {
+      "product_id": "charger-45w-usbc",
+      "category": "accessory", "brand": "Samsung",
+      "name": "Samsung 45W USB-C Fast Charger",
+      "attributes": {"wattage": 45, "colour": "black", "pack_count": 1},
+      "mrp": 2999, "search_terms": "Samsung 45W USB-C Fast Charger",
+      "complements": ["s24-256-black", "buds3-pro", "tab-a9-128-grey"],
+      "title_variants": [
+        "SAMSUNG 45 W USB-C Super Fast Charger Black",
+        "Samsung 45W Type C Travel Adapter Black"
+      ]
+    },
+    {
+      "product_id": "powerbank-20000",
+      "category": "accessory", "brand": "Mi",
+      "name": "Mi Power Bank 3i 20000mAh (Black, 18W)",
+      "attributes": {"capacity_mah": 20000, "wattage": 18, "colour": "black"},
+      "mrp": 1999, "search_terms": "Mi Power Bank 3i 20000mAh Black",
+      "complements": ["iphone-15-128-blue", "s24-256-black", "nord-ce4-lite-128"],
+      "title_variants": [
+        "MI Power Bank 3i 20000 mAh 18W Fast Charging Black",
+        "Xiaomi Mi 20000mAh Power Bank 3i Black 18 W"
+      ]
+    },
+    {
+      "product_id": "backpack-laptop-15",
+      "category": "accessory", "brand": "American Tourister",
+      "name": "American Tourister Laptop Backpack 15.6-inch (Grey, 32 L)",
+      "attributes": {"capacity_l": 32, "colour": "grey", "screen_in": 15.6},
+      "mrp": 2199, "search_terms": "American Tourister Laptop Backpack 15.6 inch Grey",
+      "complements": ["macbook-air-m3-13-256", "thinkpad-e14-512-16", "mouse-wireless"],
+      "title_variants": [
+        "AMERICAN TOURISTER 32 L Laptop Backpack 15.6 inch Grey",
+        "American Tourister Backpack Laptop 15.6 Grey 32 Litre"
+      ]
+    },
+    {
+      "product_id": "mouse-wireless",
+      "category": "accessory", "brand": "Logitech",
+      "name": "Logitech M240 Silent Wireless Mouse (Graphite)",
+      "attributes": {"colour": "graphite", "pack_count": 1, "model_number": "m240"},
+      "mrp": 1295, "search_terms": "Logitech M240 Silent Wireless Mouse Graphite",
+      "complements": ["macbook-air-m3-13-256", "thinkpad-e14-512-16", "laptop-stand"],
+      "title_variants": [
+        "LOGITECH M240 Silent Bluetooth Wireless Mouse Graphite",
+        "Logitech M240 Wireless Mouse Silent Graphite"
+      ]
+    },
+    {
+      "product_id": "ssd-external-1tb",
+      "category": "accessory", "brand": "SanDisk",
+      "name": "SanDisk Extreme Portable SSD 1TB (Black)",
+      "attributes": {"storage_gb": 1024, "colour": "black"},
+      "mrp": 9499, "search_terms": "SanDisk Extreme Portable SSD 1TB",
+      "complements": ["macbook-air-m3-13-256", "asus-vivobook-16-1tb-16", "backpack-laptop-15"],
+      "title_variants": [
+        "SANDISK Extreme Portable SSD 1 TB USB-C Black",
+        "SanDisk Extreme 1TB External Portable SSD Black"
+      ]
+    },
+    {
+      "product_id": "laptop-stand",
+      "category": "accessory", "brand": "Portronics",
+      "name": "Portronics My Buddy K4 Aluminium Laptop Stand (Silver)",
+      "attributes": {"colour": "silver", "pack_count": 1},
+      "mrp": 1499, "search_terms": "Portronics My Buddy K4 Aluminium Laptop Stand",
+      "complements": ["macbook-air-m3-13-256", "mouse-wireless", "backpack-laptop-15"],
+      "title_variants": [
+        "PORTRONICS My Buddy K4 Aluminium Laptop Stand Silver",
+        "Portronics Laptop Stand My Buddy K4 Silver Adjustable"
+      ]
+    },
+    {
+      "product_id": "screenguard-universal",
+      "category": "accessory", "brand": "AmazonBasics",
+      "name": "Tempered Glass Screen Protector (Pack of 2, Clear)",
+      "attributes": {"pack_count": 2, "colour": "clear"},
+      "mrp": 349, "search_terms": "Tempered Glass Screen Protector Pack of 2",
+      "complements": ["iphone-15-128-blue", "case-iphone-15", "redmi-note13-256-black"],
+      "title_variants": [
+        "Tempered Glass Screen Protector Guard Pack of 2 Clear",
+        "Screen Protector Tempered Glass 2 Pack Clear 9H"
+      ]
+    },
+    {
+      "product_id": "case-headphone",
+      "category": "accessory", "brand": "Generic",
+      "name": "Hard Carry Case for Over-Ear Headphones (Black)",
+      "attributes": {"colour": "black", "pack_count": 1},
+      "mrp": 799, "search_terms": "Hard Carry Case Over-Ear Headphones Black",
+      "complements": ["sony-xm5-black", "sony-xm4-black", "aux-cable-35"],
+      "title_variants": [
+        "Hard Carrying Case for Over Ear Headphones Black EVA",
+        "Headphone Hard Case Black Travel Storage"
+      ]
+    },
+    {
+      "product_id": "case-airpods",
+      "category": "accessory", "brand": "Spigen",
+      "name": "Spigen Silicone Case for AirPods Pro (Black)",
+      "attributes": {"colour": "black", "pack_count": 1},
+      "mrp": 899, "search_terms": "Spigen Silicone Case AirPods Pro Black",
+      "complements": ["airpods-pro-2", "airpods-pro-3"],
+      "title_variants": [
+        "SPIGEN Silicone Fit Case for AirPods Pro Black",
+        "Spigen AirPods Pro Silicone Protective Case Black"
+      ]
+    },
+    {
+      "product_id": "aux-cable-35",
+      "category": "accessory", "brand": "AmazonBasics",
+      "name": "3.5mm Audio Aux Cable 1.2 m (Black)",
+      "attributes": {"colour": "black", "pack_count": 1},
+      "mrp": 249, "search_terms": "3.5mm Audio Aux Cable 1.2 m Black",
+      "complements": ["sony-xm5-black", "boat-rockerz-550-black", "case-headphone"],
+      "title_variants": [
+        "3.5 mm Stereo Audio Aux Cable 1.2 m Black Male to Male",
+        "Aux Cable 3.5mm 1.2 Metre Black Audio Cord"
+      ]
+    },
+    {
+      "product_id": "case-earbuds",
+      "category": "accessory", "brand": "Generic",
+      "name": "Silicone Case for Galaxy Buds (Transparent)",
+      "attributes": {"colour": "clear", "pack_count": 1},
+      "mrp": 449, "search_terms": "Silicone Case Galaxy Buds Transparent",
+      "complements": ["buds3-pro"],
+      "title_variants": [
+        "Silicone Protective Case for Samsung Galaxy Buds Transparent",
+        "Galaxy Buds Silicone Cover Case Clear"
+      ]
+    },
+    {
+      "product_id": "watch-strap-44",
+      "category": "accessory", "brand": "Generic",
+      "name": "Silicone Sport Strap for Apple Watch 44mm (Black)",
+      "attributes": {"size_mm": 44, "colour": "black", "pack_count": 1},
+      "mrp": 599, "search_terms": "Silicone Sport Strap Apple Watch 44mm Black",
+      "complements": ["watch-se-44", "noise-colorfit-pro5"],
+      "title_variants": [
+        "Silicone Sport Band Strap for Apple Watch 44 mm Black",
+        "Apple Watch 44mm Silicone Strap Black Sport Band"
+      ]
+    },
+    {
+      "product_id": "case-ipad-10",
+      "category": "accessory", "brand": "Spigen",
+      "name": "Spigen Smart Fold Case for iPad 10th Gen (Black)",
+      "attributes": {"colour": "black", "pack_count": 1, "generation": "10"},
+      "mrp": 2299, "search_terms": "Spigen Smart Fold Case iPad 10th Gen Black",
+      "complements": ["ipad-10-64-silver", "screenguard-universal"],
+      "title_variants": [
+        "SPIGEN Smart Fold Case Cover for iPad 10 Generation Black",
+        "Spigen iPad 10th Gen Smart Fold Case Black"
+      ]
+    },
+    {
+      "product_id": "case-tab-a9",
+      "category": "accessory", "brand": "Generic",
+      "name": "Flip Cover for Galaxy Tab A9+ (Black)",
+      "attributes": {"colour": "black", "pack_count": 1},
+      "mrp": 899, "search_terms": "Flip Cover Galaxy Tab A9 Plus Black",
+      "complements": ["tab-a9-128-grey"],
+      "title_variants": [
+        "Flip Cover Case for Samsung Galaxy Tab A9+ Black",
+        "Galaxy Tab A9 Plus Flip Cover Black Stand Case"
+      ]
+    },
+    {
+      "product_id": "vacuum-bags-pack5",
+      "category": "accessory", "brand": "Eureka Forbes",
+      "name": "Vacuum Cleaner Dust Bags (Pack of 5)",
+      "attributes": {"pack_count": 5},
+      "mrp": 549, "search_terms": "Eureka Forbes Vacuum Cleaner Dust Bags Pack of 5",
+      "complements": ["vacuum-eureka-1200w", "floorcleaner-refill-2l"],
+      "title_variants": [
+        "EUREKA FORBES Vacuum Cleaner Dust Bags Pack of 5",
+        "Vacuum Dust Bags 5 Pack Eureka Forbes Replacement"
+      ]
+    },
+    {
+      "product_id": "purifier-filter-kit",
+      "category": "accessory", "brand": "Aquaguard",
+      "name": "Aquaguard RO Filter Replacement Kit",
+      "attributes": {"pack_count": 1},
+      "mrp": 2499, "search_terms": "Aquaguard RO Filter Replacement Kit",
+      "complements": ["waterpurifier-aquaguard-7l"],
+      "title_variants": [
+        "AQUAGUARD RO Service Filter Replacement Kit",
+        "Aquaguard Water Purifier RO Filter Kit Replacement"
+      ]
+    },
+    {
+      "product_id": "extension-board-6",
+      "category": "accessory", "brand": "Wipro",
+      "name": "Wipro 6-Socket Extension Board with Surge Protection (White)",
+      "attributes": {"pack_count": 1, "colour": "white"},
+      "mrp": 699, "search_terms": "Wipro 6 Socket Extension Board Surge Protection",
+      "complements": ["led-bulb-pack4", "fan-atomberg-1200mm", "charger-20w-usbc"],
+      "title_variants": [
+        "WIPRO 6 Socket Extension Board with Surge Protector White",
+        "Wipro Extension Board 6 Socket White Spike Guard"
+      ]
+    },
+    {
+      "product_id": "ironing-board",
+      "category": "accessory", "brand": "Bathla",
+      "name": "Bathla X-Pro Foldable Ironing Board (Grey)",
+      "attributes": {"colour": "grey", "pack_count": 1},
+      "mrp": 2799, "search_terms": "Bathla X-Pro Foldable Ironing Board Grey",
+      "complements": ["iron-philips-1200w", "detergent-refill-3kg"],
+      "title_variants": [
+        "BATHLA X-Pro Foldable Ironing Board Table Grey",
+        "Bathla Ironing Board Foldable X Pro Grey"
+      ]
+    }
+  ]
+}
