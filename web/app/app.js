@@ -72,8 +72,6 @@ $$('.tab').forEach(tab => {
     const view = tab.dataset.view;
     $$('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
     if (view === 'resolve' && !state.resolveLoaded) runResolve();
-    if (view === 'prices'  && !state.pricesLoaded)  loadTrackedItems();
-    if (view === 'system')  loadHealth();
   });
 });
 
@@ -718,6 +716,12 @@ async function loadHealth() {
     const h = await api('/health');
     updateStatusChip(h);
 
+    // The System Health panel was removed from the UI. The status chip in the
+    // header still needs /health, so this function must survive the panel's
+    // absence -- otherwise deleting a view breaks startup, which is exactly the
+    // kind of coupling that made earlier changes fragile.
+    if (!grid) return;
+
     const ph = h.price_history;
     const flatBad = ph.flat_series > 0;
 
@@ -763,9 +767,11 @@ async function loadHealth() {
         </div>
       </div>
     `;
-    $('#healthRaw').textContent = JSON.stringify(h, null, 2);
+    const raw = $('#healthRaw');
+    if (raw) raw.textContent = JSON.stringify(h, null, 2);
   } catch (err) {
-    showError(grid, err, 'Is the API running? <code>python -m scripts.serve</code>');
+    if (grid) showError(grid, err,
+      'Is the API running? <code>python -m scripts.serve</code>');
     updateStatusChip(null);
   }
 }

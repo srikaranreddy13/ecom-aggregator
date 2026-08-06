@@ -36,10 +36,13 @@
 </header>
 
 <nav class="tabs" role="tablist">
-  <button class="tab active" data-view="search"  role="tab">1 · Search &amp; Rank</button>
-  <button class="tab"        data-view="resolve" role="tab">2 · Entity Resolution</button>
-  <button class="tab"        data-view="prices"  role="tab">3 · Price History</button>
-  <button class="tab"        data-view="system"  role="tab">4 · System Health</button>
+  <button class="tab active" data-view="search"  role="tab">Shop</button>
+  <!-- Price History and System Health are gone: a shopper has no use for
+       flat_series counts or FX snapshot ages, and leaving developer diagnostics
+       as the app's furniture made a consumer product look like a dashboard.
+       Entity Resolution stays because it demonstrates the project's core
+       technical claim -- kept out of the main flow, labelled as evidence. -->
+  <button class="tab"        data-view="resolve" role="tab">Project evidence</button>
 </nav>
 
 <main>
@@ -149,8 +152,13 @@
   <div id="blocks" class="blocks"></div>
 </section>
 
-<!-- =========================================================== PRICES -->
-<section class="view" id="view-prices">
+<!-- =========================================================== PRICES
+     REMOVED from the UI. The price-history data and its /price-history and
+     /tracked-items endpoints still exist and are still tested -- the forecasting
+     module will need them -- but they are not something a shopper should be
+     shown. Reachable at /price-history/{source}/{id} for development.
+-->
+<section class="view" id="view-prices" hidden>
 
   <div class="explainer">
     <strong>Why this matters.</strong> Forecasting needs price <em>history</em>,
@@ -180,8 +188,11 @@
   </div>
 </section>
 
-<!-- =========================================================== SYSTEM -->
-<section class="view" id="view-system">
+<!-- =========================================================== SYSTEM
+     REMOVED from the UI, same reasoning. /health and /config remain live and
+     linked in the footer, which is where an operational diagnostic belongs.
+-->
+<section class="view" id="view-system" hidden>
 
   <div class="explainer">
     <strong>Health checks that report data quality, not just liveness.</strong>
