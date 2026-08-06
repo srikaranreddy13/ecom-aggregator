@@ -220,7 +220,10 @@ def create_app() -> FastAPI:
         Lets the UI offer browsing rather than only search -- a shopper who does
         not know what they want cannot type a query.
         """
-        cat = get_catalogue()
+        # resources.catalogue, NOT get_catalogue(): it must be the catalogue the
+        # OFFERS came from. Reading a different one made every category chip
+        # return the same products -- see build_source().
+        cat = resources.catalogue
         counts: dict[str, int] = {}
         for p in cat.all_products():
             if p.category:
@@ -248,7 +251,10 @@ def create_app() -> FastAPI:
         Matched by title because the ranking pipeline works in Listings, which
         carry titles but not catalogue ids.
         """
-        rec = get_recommender()
+        # Same reasoning as /categories: the recommender must be built over the
+        # catalogue whose products are on screen, or title matching never hits
+        # and every product reports zero recommendations.
+        rec = resources.recommender or get_recommender()
         items = rec.recommend_for_titles([title], k=k)
 
         out = []

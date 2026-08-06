@@ -25,7 +25,9 @@ import threading
 
 from ..adapters.base import SourceAdapter
 from ..adapters.synthetic_adapter import synthetic_market
+from ..catalogue import get_catalogue
 from ..config import settings
+from ..recommender import Recommender
 from ..logging_setup import get_logger
 from ..matching.embedder import Embedder
 from ..matching.resolver import EntityResolver
@@ -44,6 +46,8 @@ class Resources:
         self.embedder: Embedder | None = None
         self.resolver: EntityResolver | None = None
         self.adapters: list[SourceAdapter] = []
+        self.catalogue = None
+        self.recommender: Recommender | None = None
         self._local = threading.local()
 
     # ---------------- lifecycle ----------------
@@ -53,7 +57,12 @@ class Resources:
                                        "config": settings.describe()})
         self.embedder = Embedder()
         self.resolver = EntityResolver(self.embedder)
-        self.adapters = build_adapters()
+        # Offers and catalogue are chosen together and held together. Every
+        # consumer -- /search, /categories, /recommendations -- must read the
+        # SAME catalogue the offers came from, or the UI silently disagrees with
+        # itself. See build_source().
+        self.adapters, self.catalogue = build_source()
+        self.recommender = Recommender(self.catalogue.all_products())
 
         # Touch the DB once on the main thread so schema creation and migration
         # happen at startup, where a failure is loud, not inside a request.
@@ -99,50 +108,71 @@ class Resources:
         )
 
 
-def build_adapters() -> list[SourceAdapter]:
-    """Choose the offer sources, most-real-first.
+def build_source() -> tuple[list[SourceAdapter], object]:
+    """Choose a COHERENT (offers, catalogue) pair.
 
-    Order matters and is a judgement about honesty, not convenience:
+    THIS RETURNS BOTH TOGETHER FOR A REASON, and it is a bug fix.
 
-      1. eBay -- real sellers, real prices, real product URLs. Needs a key.
-      2. Open Prices -- REAL shop prices for real groceries, no key at all.
-         Chosen over the simulation whenever it is reachable, because a real
-         price beats an invented one even when the category range is narrower.
-      3. Synthetic market -- last resort, and it announces itself.
+    A previous version picked the offer source "most-real-first" and let the
+    catalogue be chosen independently. The result was incoherent: offers came from
+    Open Prices (French grocery shops) while the category chips and the
+    recommender came from the DummyJSON catalogue. So every category button
+    returned the same rice and cheese, and recommendations were always empty
+    because the recommender matched titles against a catalogue that had nothing
+    to do with the products on screen.
 
-    Override with SOURCE=ebay|openprices|synthetic to force one.
+    Nothing errored. Both halves were individually correct. The app was broken
+    because they disagreed -- which is why they are now selected as one unit and
+    cannot drift apart.
+
+    Modes (SOURCE=...):
+
+      shop        DummyJSON catalogue + simulated competing sellers. THE DEFAULT.
+                  194 products over 24 categories, real images, working category
+                  browse, working recommendations, and three genuinely different
+                  profile winners per product. Prices are simulated.
+      openprices  Open Prices catalogue + real shop offers. REAL prices from real
+                  named shops, no API key. Groceries only, and price is the only
+                  criterion that varies.
+      ebay        Live eBay sellers (needs credentials).
     """
-    forced = settings.source.lower()
-    adapters: list[SourceAdapter] = []
+    mode = settings.source.lower()
+    if mode == "auto":
+        mode = "ebay" if settings.has_ebay_credentials() else "shop"
 
-    if forced in ("auto", "ebay") and settings.has_ebay_credentials():
+    if mode == "ebay":
         from ..adapters.ebay_adapter import EbayAdapter
 
         ebay = EbayAdapter()
         if ebay.health():
-            adapters.append(ebay)
-            log.info("using live eBay sellers")
-        else:
-            log.warning("ebay credentials set but health check failed; skipping")
+            log.info("source: live eBay sellers")
+            return [ebay], get_catalogue()
+        log.warning("ebay unavailable, falling back to the shop mode")
+        mode = "shop"
 
-    if not adapters and forced in ("auto", "openprices"):
-        from ..openprices import OpenPricesAdapter
+    if mode == "openprices":
+        from ..openprices import OpenPricesAdapter, OpenPricesCatalogue
 
-        op = OpenPricesAdapter()
-        if op.health():
-            adapters.append(op)
-            log.info("using Open Prices -- real shop prices, no API key")
-        elif forced == "openprices":
-            log.error("Open Prices unreachable and SOURCE=openprices was forced")
+        catalogue = OpenPricesCatalogue()
+        adapter = OpenPricesAdapter(catalogue=catalogue)
+        if adapter.health():
+            log.info("source: Open Prices -- real shop prices, no API key. "
+                     "Groceries only; price is the only varying criterion.")
+            return [adapter], catalogue
+        log.error("Open Prices unreachable, falling back to the shop mode")
 
-    if not adapters:
-        adapters = list(synthetic_market())
-        log.warning(
-            "serving from the SYNTHETIC market -- prices are simulated",
-            extra={"sellers": [a.name for a in adapters]},
-        )
+    catalogue = get_catalogue()
+    adapters = list(synthetic_market(products=catalogue.all_products()))
+    log.info("source: shop mode -- real products and images, simulated sellers",
+             extra={"sellers": [a.name for a in adapters],
+                    "catalogue": catalogue.name,
+                    "products": len(catalogue.all_products())})
+    return adapters, catalogue
 
-    return adapters
+
+def build_adapters() -> list[SourceAdapter]:
+    """Backwards-compatible shim: offers only."""
+    return build_source()[0]
 
 
 resources = Resources()
