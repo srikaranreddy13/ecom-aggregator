@@ -111,12 +111,22 @@ class Settings:
         default_factory=lambda: _get_opt_float("SIMILARITY_THRESHOLD")
     )
 
+    # -- SerpApi (Google Shopping: real prices from real retailers) --
+    # Free plan is 250 searches/MONTH, so caching is not an optimisation here,
+    # it is what makes the app usable. See CACHE_TTL_SECONDS.
+    serpapi_key: str | None = field(default_factory=lambda: _get_opt("SERPAPI_KEY"))
+    serpapi_country: str = field(default_factory=lambda: _get("SERPAPI_COUNTRY", "in").lower())
+    serpapi_language: str = field(default_factory=lambda: _get("SERPAPI_LANGUAGE", "en"))
+
     # -- offer source (the SELLER dimension) --
     # auto        most-real-first: eBay if keyed, else Open Prices, else simulated
     # ebay        force the live eBay marketplace (needs credentials)
     # openprices  force REAL shop prices from Open Prices -- no API key needed
     # synthetic   force the simulated four-seller market
     source: str = field(default_factory=lambda: _get("SOURCE", "auto").lower())
+
+    def has_serpapi(self) -> bool:
+        return bool(self.serpapi_key)
 
     # -- catalogue (the PRODUCT dimension; see src/catalogue.py) --
     # auto      try the live keyless API, fall back to the bundled file

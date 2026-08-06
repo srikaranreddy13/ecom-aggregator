@@ -28,6 +28,14 @@ os.environ.setdefault("EMBEDDER_BACKEND", "tfidf")
 # path is exercised by its own tests, which skip when offline.
 os.environ.setdefault("CATALOGUE_SOURCE", "file")
 
+# Force the no-key mode. `setdefault` is NOT enough here: a developer's .env sets
+# SOURCE=serpapi, and .env is read by src.config, so without an explicit override
+# the suite would spend real SerpApi credits -- 250 per MONTH, so a few full runs
+# would exhaust the plan and the failure would look like a broken adapter rather
+# than an empty wallet. Tests must never consume a metered external quota.
+os.environ["SOURCE"] = "shop"
+os.environ.pop("SERPAPI_KEY", None)
+
 from src.matching.embedder import Embedder  # noqa: E402
 from src.storage import db  # noqa: E402
 

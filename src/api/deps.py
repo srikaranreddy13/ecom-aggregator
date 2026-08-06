@@ -138,7 +138,33 @@ def build_source() -> tuple[list[SourceAdapter], object]:
     """
     mode = settings.source.lower()
     if mode == "auto":
-        mode = "ebay" if settings.has_ebay_credentials() else "shop"
+        if settings.has_serpapi():
+            mode = "serpapi"
+        elif settings.has_ebay_credentials():
+            mode = "ebay"
+        else:
+            mode = "shop"
+
+    if mode == "serpapi":
+        from ..adapters.serpapi_adapter import SerpApiShoppingAdapter
+
+        adapter = SerpApiShoppingAdapter()
+        if adapter.health():
+            left = adapter._searches_left
+            log.info("source: Google Shopping via SerpApi -- real retailers, "
+                     "real prices, any product",
+                     extra={"country": adapter.country, "searches_left": left})
+            if left is not None and left < 25:
+                log.warning("SerpApi quota nearly exhausted -- new queries will "
+                            "start failing; cached ones keep working",
+                            extra={"searches_left": left})
+            # SerpApi supplies OFFERS for whatever the user types; it has no
+            # browsable catalogue. The local catalogue is kept alongside it so
+            # category browse and recommendations still work -- and because they
+            # are returned together, they cannot silently disagree.
+            return [adapter], get_catalogue()
+        log.error("SerpApi key missing or rejected, falling back to shop mode")
+        mode = "shop"
 
     if mode == "ebay":
         from ..adapters.ebay_adapter import EbayAdapter
