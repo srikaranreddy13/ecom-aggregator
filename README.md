@@ -7,7 +7,7 @@ multi-criteria (TOPSIS) ranking and recommendations, served over an HTTP API wit
 a live web frontend.
 
 **Status:** aggregation, entity resolution, ranking, buy links and
-recommendations are complete and tested (**197 tests**). Price forecasting is not
+recommendations are complete and tested (**215 tests**). Price forecasting is not
 built yet, but its data infrastructure exists and works.
 
 Products come from a **live catalogue over HTTP with no API key** — 194 products
@@ -80,7 +80,7 @@ runs the demo and evaluations, builds the dashboard, opens it.
 Everything individually (set `EMBEDDER_BACKEND` first, see above):
 
 ```
-python -m pytest tests -q                        197 tests
+python -m pytest tests -q                        215 tests
 python -m scripts.backfill_prices --days 180     generate price history
 python -m scripts.serve                          API + frontend -> :8000
 python -m scripts.demo                           terminal walkthrough
@@ -156,13 +156,65 @@ So the product list is a **remote, replaceable resource**, never a file to grow:
 | Source | What it gives | Needs a key? |
 |---|---|---|
 | `DummyJsonCatalogue` *(default)* | 194 products, 24 categories, real images | **No** |
+| **`OpenPricesCatalogue`** | **4.4M real products with real shop prices** | **No** |
 | `FileCatalogue` | `data/catalogue.json`, ~44 products | No — offline fallback only |
-| eBay Browse API | real sellers, real prices, real product URLs | Yes (free) |
+| eBay Browse API | real sellers, real prices, real product URLs | Yes (free, needs approval) |
 
 Set with `CATALOGUE_SOURCE=auto|dummyjson|file`. A fallback logs a **warning**,
 never passes silently — serving 44 local products while appearing to serve 194
 live ones is exactly the kind of quiet degradation this project has been bitten
 by before.
+
+### Real prices with no API key — Open Prices
+
+```
+set SOURCE=openprices
+python -m scripts.serve
+```
+
+`src/openprices.py` uses **Open Food Facts** (product database) and
+**Open Prices** (its crowd-sourced price layer): 286,000+ real price observations
+from real named shops, each dated. No key, no registration, no approval queue.
+
+Searching `nutella` returns genuine price comparison:
+
+| Shop | Price | Converted |
+|---|---|---|
+| Super U, Paris | €2.76 | ₹303 |
+| Auchan Supermarché, Grenoble | €2.77 | ₹305 |
+| Colruyt, Laneuveville | €3.52 | ₹387 |
+| Auchan, Nancy | €3.65 | ₹401 |
+
+Nobody invented those numbers. **This is also the first source that makes
+`real_observations` on `/health` non-zero**, because every observation carries the
+date it was seen — so `price_history` can hold real market prices instead of
+simulated ones.
+
+**Honest limits, and they are real:**
+
+- **Groceries and household goods only.** No phones, no laptops — Open Food Facts
+  is a food database.
+- **Mostly European shops, priced in EUR.** Converted by `src/money.py`, so a
+  stale FX snapshot shifts every price. `/health` reports the snapshot's age.
+- **Crowd-sourced**, so coverage is uneven and a price may be months old. The
+  observation date is carried through and shown, not hidden.
+- **Physical shops have no delivery time and no seller rating.** Those are left
+  `None` and imputed equally, so for this source the MCDM ranks on price alone.
+  That is the correct answer for a supermarket shelf — but it means the
+  three-profile demo is less interesting here than on the simulated market.
+
+So: use `SOURCE=openprices` when the question is *"are the prices real?"*, and
+`SOURCE=synthetic` when it is *"does multi-criteria ranking work?"*. Both are
+wired; neither pretends to be the other.
+
+> **A bug this source found.** A Danish shop's price arrived in **DKK**, which had
+> no entry in the FX table — so it passed through unconverted and a 25 DKK jar was
+> compared as 25 INR, winning the price ranking outright. Exactly the bug
+> `src/money.py` was written to prevent, reintroduced by an *incomplete lookup
+> table* rather than by missing code. The table now carries 44 currencies, and an
+> unconvertible price is tagged `_price_not_comparable` and counted into
+> `diagnostics.prices_not_comparable` — because a wrong ranking caused by a
+> missing rate looks exactly like a correct one.
 
 **Product and seller are separate dimensions.** The catalogue supplies products;
 the adapter layer supplies offers — who sells it, at what price, how fast, how
@@ -632,7 +684,7 @@ scripts/analyse_normalisation.py the refined Result 2
 scripts/build_dashboard.py       static dashboard
 scripts/update_fx_rates.py       refresh the FX snapshot
 
-tests/                   197 tests across 10 files
+tests/                   215 tests across 10 files
 data/                    catalogue.json (offline fallback)  fx_rates.json
                          sample_listings.json (gold eval set)  aggregator.db
 Dockerfile  docker-compose.yml  .github/workflows/ci.yml  .env.example

@@ -111,6 +111,13 @@ class Settings:
         default_factory=lambda: _get_opt_float("SIMILARITY_THRESHOLD")
     )
 
+    # -- offer source (the SELLER dimension) --
+    # auto        most-real-first: eBay if keyed, else Open Prices, else simulated
+    # ebay        force the live eBay marketplace (needs credentials)
+    # openprices  force REAL shop prices from Open Prices -- no API key needed
+    # synthetic   force the simulated four-seller market
+    source: str = field(default_factory=lambda: _get("SOURCE", "auto").lower())
+
     # -- catalogue (the PRODUCT dimension; see src/catalogue.py) --
     # auto      try the live keyless API, fall back to the bundled file
     # dummyjson  force live -- fail loudly rather than silently degrading

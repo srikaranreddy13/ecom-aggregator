@@ -30,7 +30,7 @@ from .logging_setup import get_logger
 from .matching import attributes
 from .matching.embedder import Embedder
 from .matching.resolver import EntityResolver, ProductCluster
-from .money import normalise_listings
+from .money import count_incomparable, normalise_listings
 from .ranking.mcdm import topsis
 from .storage import db
 
@@ -153,6 +153,11 @@ class AggregatorPipeline:
             "failures": failures,
             "disabled_adapters": sorted(self._disabled),
             "base_currency": self.base_currency,
+            # Non-zero means a missing FX rate has made some prices
+            # incomparable, so the ranking for those is unreliable. A wrong
+            # ranking from a missing rate looks exactly like a correct one, so
+            # it has to be reported rather than merely logged.
+            "prices_not_comparable": count_incomparable(all_listings),
             "synthetic_sources": sorted(
                 ad.name for ad in self.adapters if getattr(ad, "is_synthetic", False)
             ),

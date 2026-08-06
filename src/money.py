@@ -150,11 +150,24 @@ def normalise_listing(listing, to: str | None = None, table: RateTable | None = 
     try:
         new_price = round(tbl.convert(listing.price, src, target), 2)
     except UnknownCurrencyError as exc:
+        # A price in an unknown currency is NOT COMPARABLE, and that is worse
+        # than it sounds. A 25 DKK jar of Nutella left unconverted was compared
+        # as 25 INR and won the price ranking outright -- the exact bug this
+        # module exists to prevent, reintroduced by a missing rate rather than
+        # missing code.
+        #
+        # The listing is still returned rather than dropped (dropping silently
+        # shrinks a product's offer list) but it is TAGGED, so the pipeline can
+        # count it and surface it. An incomparable price must never be invisible.
         log.warning(
-            "skipping currency conversion for listing",
+            "price left unconverted -- currency has no rate, so this listing is "
+            "NOT comparable and may rank wrongly",
             extra={"listing": listing.key, "currency": src, "reason": str(exc)},
         )
-        return listing
+        raw = dict(listing.raw or {})
+        raw["_price_not_comparable"] = True
+        raw["_unconvertible_currency"] = src
+        return replace(listing, raw=raw)
 
     raw = dict(listing.raw or {})
     raw["_original_price"] = listing.price
@@ -172,10 +185,31 @@ def normalise_listings(listings: list, to: str | None = None) -> list:
     out = [normalise_listing(l, to=target, table=tbl) for l in listings]
 
     converted = sum(1 for l in out if (l.raw or {}).get("_original_currency"))
-    if converted:
+    incomparable = sum(1 for l in out if (l.raw or {}).get("_price_not_comparable"))
+    if converted or incomparable:
         log.info(
             "converted listing prices",
             extra={"converted": converted, "total": len(out),
+                   "not_comparable": incomparable,
                    "base_currency": target, "fx_as_of": tbl.as_of.isoformat()},
         )
+    if incomparable:
+        log.error(
+            "some prices could not be converted -- add the missing rates with "
+            "`python -m scripts.update_fx_rates`",
+            extra={"not_comparable": incomparable,
+                   "currencies": sorted({(l.raw or {}).get("_unconvertible_currency")
+                                        for l in out
+                                        if (l.raw or {}).get("_price_not_comparable")})},
+        )
     return out
+
+
+def count_incomparable(listings) -> int:
+    """How many listings carry a price that could not be converted.
+
+    Surfaced in pipeline diagnostics and on /health, because a wrong ranking
+    caused by a missing FX rate looks exactly like a correct one.
+    """
+    return sum(1 for l in listings if (getattr(l, "raw", None) or {})
+              .get("_price_not_comparable"))

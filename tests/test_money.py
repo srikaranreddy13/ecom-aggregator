@@ -67,11 +67,22 @@ def test_normalise_listing_preserves_original():
     assert l.price == 699.0 and l.currency == "USD"
 
 
-def test_unknown_currency_listing_survives():
-    """A bad row must not crash the query or silently vanish from its cluster."""
+def test_unknown_currency_listing_survives_but_is_flagged():
+    """A bad row must not crash the query or silently vanish from its cluster --
+    and it must not silently WIN one either.
+
+    An unconverted price is not comparable. A 25 DKK jar left unconverted was
+    compared as 25 INR and won the price ranking outright. So the listing is kept
+    (dropping it shrinks a product's offer list with no trace) but tagged, and
+    the pipeline counts the tag into its diagnostics.
+    """
     l = Listing("weird", "1", "thing", 100.0, currency="XYZ")
     out = normalise_listing(l, to="INR", table=TABLE)
-    assert out is l  # returned unchanged, still rankable within its own currency
+
+    assert out.price == 100.0 and out.currency == "XYZ"   # untouched
+    assert out.raw["_price_not_comparable"] is True        # but loud
+    assert out.raw["_unconvertible_currency"] == "XYZ"
+    assert l.raw.get("_price_not_comparable") is None      # original unmutated
 
 
 def test_usd_listing_no_longer_beats_inr_on_price():
@@ -102,15 +113,29 @@ def test_usd_listing_no_longer_beats_inr_on_price():
 
 
 def test_normalise_listings_batch_mixed():
+    """Three amounts of equal value in different currencies must converge.
+
+    Expected values are DERIVED from the live rate table rather than hardcoded.
+    An earlier version asserted `== 8750`, computed from the rates that happened
+    to be committed at the time -- so `scripts/update_fx_rates` broke the suite,
+    which is backwards: refreshing rates is a supported operation and must not
+    look like a regression. What is actually being tested is convergence, not a
+    particular number.
+    """
+    table = rate_table()
+    one_usd_in = lambda cur: table.convert(1.0, "USD", cur)  # noqa: E731
+
     listings = [
-        Listing("a", "1", "x", 8750.0, currency="INR"),
-        Listing("b", "2", "y", 100.0, currency="USD"),
-        Listing("c", "3", "z", 92.0, currency="EUR"),
+        Listing("a", "1", "x", 100 * one_usd_in("INR"), currency="INR"),
+        Listing("b", "2", "y", 100 * one_usd_in("USD"), currency="USD"),
+        Listing("c", "3", "z", 100 * one_usd_in("EUR"), currency="EUR"),
     ]
     out = normalise_listings(listings, to="INR")
+
     assert all(l.currency == "INR" for l in out)
-    # All three are 100 USD equivalent, so all three land on 8750 INR.
-    assert [round(l.price) for l in out] == [8750, 8750, 8750]
+    expected = round(100 * one_usd_in("INR"))
+    assert [round(l.price) for l in out] == [expected] * 3
+    assert not any((l.raw or {}).get("_price_not_comparable") for l in out)
 
 
 def test_shipped_rate_table_loads_and_is_self_consistent():

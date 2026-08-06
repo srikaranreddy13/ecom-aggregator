@@ -100,22 +100,47 @@ class Resources:
 
 
 def build_adapters() -> list[SourceAdapter]:
-    """Live sources when credentials exist, simulated market otherwise."""
+    """Choose the offer sources, most-real-first.
+
+    Order matters and is a judgement about honesty, not convenience:
+
+      1. eBay -- real sellers, real prices, real product URLs. Needs a key.
+      2. Open Prices -- REAL shop prices for real groceries, no key at all.
+         Chosen over the simulation whenever it is reachable, because a real
+         price beats an invented one even when the category range is narrower.
+      3. Synthetic market -- last resort, and it announces itself.
+
+    Override with SOURCE=ebay|openprices|synthetic to force one.
+    """
+    forced = settings.source.lower()
     adapters: list[SourceAdapter] = []
 
-    if settings.has_ebay_credentials():
+    if forced in ("auto", "ebay") and settings.has_ebay_credentials():
         from ..adapters.ebay_adapter import EbayAdapter
 
         ebay = EbayAdapter()
         if ebay.health():
             adapters.append(ebay)
+            log.info("using live eBay sellers")
         else:
             log.warning("ebay credentials set but health check failed; skipping")
 
+    if not adapters and forced in ("auto", "openprices"):
+        from ..openprices import OpenPricesAdapter
+
+        op = OpenPricesAdapter()
+        if op.health():
+            adapters.append(op)
+            log.info("using Open Prices -- real shop prices, no API key")
+        elif forced == "openprices":
+            log.error("Open Prices unreachable and SOURCE=openprices was forced")
+
     if not adapters:
         adapters = list(synthetic_market())
-        log.warning("serving from the synthetic market -- no live source configured",
-                    extra={"sellers": [a.name for a in adapters]})
+        log.warning(
+            "serving from the SYNTHETIC market -- prices are simulated",
+            extra={"sellers": [a.name for a in adapters]},
+        )
 
     return adapters
 

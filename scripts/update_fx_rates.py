@@ -34,9 +34,27 @@ log = get_logger("scripts.update_fx_rates")
 
 API = "https://open.er-api.com/v6/latest/USD"
 
-# Only currencies the project actually needs. Keeping the table small makes the
-# diff readable when you commit a refresh.
-WANTED = ["USD", "INR", "EUR", "GBP", "AUD", "CAD", "JPY", "SGD", "AED"]
+# Currencies the project can actually encounter.
+#
+# THIS LIST GREW FOR A REASON. It began as nine majors, which was fine while the
+# only live source was eBay US. Then Open Prices arrived -- crowd-sourced European
+# shop prices -- and a Danish shop's DKK listing hit a currency with no rate. It
+# was passed through UNCONVERTED, so a 25 DKK jar was compared as 25 INR and won
+# the price ranking outright. Precisely the bug src/money.py was written to
+# prevent, reintroduced by an incomplete table rather than by missing code.
+#
+# The lesson: a lookup table is a silent failure surface. Better to carry thirty
+# rates nobody needs than to discover the missing one through a wrong ranking.
+WANTED = [
+    # majors
+    "USD", "INR", "EUR", "GBP", "JPY", "CHF", "AUD", "CAD", "NZD", "SGD",
+    # European non-euro -- Open Prices covers these shops heavily
+    "DKK", "SEK", "NOK", "PLN", "CZK", "HUF", "RON", "BGN", "ISK", "TRY",
+    # other regions a marketplace may quote
+    "AED", "SAR", "ZAR", "BRL", "MXN", "ARS", "CNY", "HKD", "KRW", "THB",
+    "MYR", "IDR", "PHP", "VND", "ILS", "EGP", "NGN", "KES", "PKR", "BDT",
+    "LKR", "NPR", "RUB", "UAH",
+]
 
 
 def fetch() -> dict[str, float]:

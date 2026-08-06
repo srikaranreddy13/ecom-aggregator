@@ -58,7 +58,7 @@ re-run it if you open a new one. To make it permanent, copy `.env.example` to
 python -m pytest tests -q
 ```
 
-Expect **197 passed**. If you see 11, you are running an older copy.
+Expect **215 passed**. If you see 11, you are running an older copy.
 
 ### Step 4 — generate the price history
 
@@ -214,7 +214,7 @@ to PATH".
 Leftover rows from the old static-file collector.
 `python -m scripts.backfill_prices --purge-flat`
 
-**Tests show 11 passed instead of 145**
+**Tests show 11 passed instead of 215**
 You have an older copy of the project.
 
 ---
@@ -235,6 +235,40 @@ working in the meantime, so nothing is blocked.
 
 The similarity threshold adjusts automatically per backend
 (`EntityResolver.DEFAULT_THRESHOLD`), so you do not need to re-tune anything.
+
+---
+
+## Real prices with NO API key — Open Prices
+
+The fastest way to show genuinely real prices. No key, no registration, no
+approval wait.
+
+```
+set SOURCE=openprices
+python -m scripts.serve
+```
+
+Then search **`nutella`**, **`coca cola`**, **`shampoo`**, **`coffee`**.
+
+You get real prices from real named shops — Super U Paris €2.76, Auchan Grenoble
+€2.77, Colruyt €3.52 — converted to rupees, each with the date it was observed
+and a working link to the source. 286,000+ price records across 4.4M products.
+
+**What to expect, so nothing surprises you live:**
+
+- **Groceries and household goods only.** No phones or laptops — Open Food Facts
+  is a food database. Searching `iphone` here returns nothing.
+- **Fewer offers per product** than the simulated market, and only price varies:
+  a supermarket shelf has no delivery estimate and no seller rating, so those are
+  left blank and the ranking is by price alone. **The three-profile demo is less
+  interesting on this source** — use `SOURCE=synthetic` for that part.
+- **Slower**, because it makes several live API calls per search.
+
+Switch back with `set SOURCE=synthetic` (or `set SOURCE=auto`).
+
+> **Which source for which point?** `openprices` answers *"are the prices real?"*.
+> `synthetic` answers *"does multi-criteria ranking work?"*. Show both — they
+> prove different things, and neither pretends to be the other.
 
 ---
 
@@ -292,4 +326,4 @@ your price history. Use `down -v` only when you mean to.
 | `scripts/collect_prices.py` | Daily snapshot — schedule this |
 | `scripts/analyse_normalisation.py` | The refined Result 2 |
 | `scripts/update_fx_rates.py` | Refresh the FX snapshot |
-| `tests/` | 197 tests |
+| `tests/` | 215 tests |
