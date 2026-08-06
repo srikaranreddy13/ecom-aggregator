@@ -60,13 +60,29 @@ class AggregatorPipeline:
 
     # ---------------- cache ----------------
 
-    def _cache_key(self, adapter: SourceAdapter, query: str, limit: int) -> str:
-        return f"v1:{adapter.name}:{limit}:{query.strip().lower()}"
+    def _cache_key(self, adapter: SourceAdapter, query: str, limit: int,
+                   category: str | None = None) -> str:
+        """Cache key. MUST include every input that changes the result.
 
-    def _cached(self, adapter: SourceAdapter, query: str, limit: int) -> list[Listing] | None:
+        REGRESSION THIS FIXES. The key was (adapter, limit, query) and omitted the
+        category. With a search-driven source a category chip sends an EMPTY query
+        plus a category, so `category=laptops` and `category=mens-shoes` produced
+        the identical key -- and every category after the first was served the
+        first one's cached response. Every chip showed laptops.
+
+        The bug was invisible in shop mode, where the category was applied by the
+        adapter after a query that always differed. A cache key that omits a
+        parameter is a correctness bug, not a performance one.
+        """
+        return (f"v2:{adapter.name}:{limit}:{query.strip().lower()}"
+                f":{(category or '').strip().lower()}")
+
+    def _cached(self, adapter: SourceAdapter, query: str, limit: int,
+                category: str | None = None) -> list[Listing] | None:
         if not (self.conn and settings.cache_enabled and adapter.cacheable):
             return None
-        payload = db.cache_get(self.conn, self._cache_key(adapter, query, limit),
+        payload = db.cache_get(self.conn,
+                              self._cache_key(adapter, query, limit, category),
                               ttl_seconds=self.cache_ttl)
         if payload is None:
             return None
@@ -80,10 +96,11 @@ class AggregatorPipeline:
             return None
 
     def _store(self, adapter: SourceAdapter, query: str, limit: int,
-               listings: list[Listing]) -> None:
+               listings: list[Listing], category: str | None = None) -> None:
         if not (self.conn and settings.cache_enabled and adapter.cacheable):
             return
-        db.cache_put(self.conn, self._cache_key(adapter, query, limit),
+        db.cache_put(self.conn,
+                     self._cache_key(adapter, query, limit, category),
                      [l.to_dict() for l in listings])
 
     # ---------------- fetch ----------------
@@ -101,7 +118,7 @@ class AggregatorPipeline:
             if ad.name in self._disabled:
                 continue
 
-            hit = self._cached(ad, query, limit_per_source)
+            hit = self._cached(ad, query, limit_per_source, category)
             if hit is not None:
                 all_listings.extend(hit)
                 per_source[ad.name] = len(hit)
@@ -135,7 +152,7 @@ class AggregatorPipeline:
                               extra={"adapter": ad.name})
                 continue
 
-            self._store(ad, query, limit_per_source, got)
+            self._store(ad, query, limit_per_source, got, category)
             all_listings.extend(got)
             per_source[ad.name] = len(got)
 

@@ -238,6 +238,39 @@ class Recommender:
         return []
 
 
+def from_search_results(results: list[dict]) -> Recommender:
+    """Build a recommender over the products a search actually returned.
+
+    WHY THIS EXISTS. The catalogue-backed recommender assumes the products on
+    screen come from the catalogue it indexed. With a search-driven source like
+    Google Shopping that is false: the screen shows whatever the retailer search
+    returned, so title lookup against the catalogue never hits and every product
+    reported zero recommendations.
+
+    Recommending from the fetched result set is also the more honest answer for a
+    search-driven aggregator -- it can only suggest things it has really seen
+    priced, and it costs no extra API quota because the search response is
+    already cached.
+    """
+    products = []
+    for row in results:
+        offers = row.get("all_offers") or []
+        cheapest = min((o.get("price", 0.0) for o in offers), default=0.0)
+        products.append(Product(
+            product_id=row.get("cluster_id") or row.get("product", ""),
+            title=row.get("product", ""),
+            brand=row.get("brand"),
+            category=row.get("category") or "search-result",
+            reference_price=float(cheapest or 0.0),
+            currency=row.get("currency", "INR"),
+            image_url=row.get("image_url"),
+            rating=max((o.get("seller_rating") or 0) for o in offers) if offers else None,
+            tags=[t for t in (row.get("specs") or "").split(" · ") if t],
+            is_reference_price=False,
+        ))
+    return Recommender(products)
+
+
 _active: Recommender | None = None
 
 

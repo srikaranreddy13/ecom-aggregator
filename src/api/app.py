@@ -50,7 +50,7 @@ from ..matching.resolver import (
 from ..links import retailer_links
 from ..money import rate_table, rate_table_age_days
 from ..ranking.mcdm import DEFAULT_WEIGHTS
-from ..recommender import get_recommender
+from ..recommender import from_search_results, get_recommender
 from ..storage import db
 from .deps import VERSION, resources
 from .schemas import (
@@ -244,6 +244,10 @@ def create_app() -> FastAPI:
     def recommendations(
         title: str = Query(..., min_length=1, max_length=300,
                            description="product title to recommend against"),
+        q: str = Query("", max_length=200,
+                       description="the search that produced this product; lets a "
+                                   "search-driven source recommend from its own "
+                                   "results (free -- served from cache)"),
         k: int = Query(6, ge=1, le=24),
     ):
         """'Customers who bought this also bought' for one product.
@@ -251,11 +255,26 @@ def create_app() -> FastAPI:
         Matched by title because the ranking pipeline works in Listings, which
         carry titles but not catalogue ids.
         """
-        # Same reasoning as /categories: the recommender must be built over the
-        # catalogue whose products are on screen, or title matching never hits
-        # and every product reports zero recommendations.
+        # The recommender must index the products ON SCREEN, or title matching
+        # never hits. Two cases, because two kinds of source:
+        #
+        #   catalogue-driven (shop mode)  -- the pre-indexed catalogue is right
+        #   search-driven (SerpApi)       -- the catalogue knows nothing about
+        #                                    what the retailer search returned,
+        #                                    so recommend from that result set
+        #
+        # Passing `q` re-runs the search, which is FREE: the response is already
+        # in the SQLite cache, so no API quota is spent.
         rec = resources.recommender or get_recommender()
         items = rec.recommend_for_titles([title], k=k)
+        basis = "catalogue"
+
+        if not items and q:
+            pipe = resources.pipeline()
+            results = pipe.search(q, limit_per_source=40)
+            rec = from_search_results(results)
+            items = rec.recommend_for_titles([title], k=k)
+            basis = "search results"
 
         out = []
         for r in items:
@@ -276,9 +295,11 @@ def create_app() -> FastAPI:
             "recommendations": out,
             # Stated in the payload so any client -- not just our own frontend --
             # reports the basis honestly rather than implying real behaviour data.
-            "basis": ("complement rules, substitutes and brand/tag affinity. "
-                      "No user interaction data is used; this is a content-and-"
-                      "rules recommender, not collaborative filtering."),
+            "source": basis,
+            "basis": (f"drawn from {basis}, using complement rules, substitutes "
+                      "and brand/tag affinity. No user interaction data is used; "
+                      "this is a content-and-rules recommender, not "
+                      "collaborative filtering."),
         }
 
     @app.get("/search", tags=["search"])

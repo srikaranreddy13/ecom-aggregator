@@ -221,14 +221,22 @@ class SerpApiShoppingAdapter(SourceAdapter):
                 "SOURCE=shop for the no-key mode.",
                 source=self.name,
             )
-        if not query.strip():
-            # An empty query would spend a credit to fetch whatever Google feels
-            # like showing. Browsing is handled by the catalogue, not by search.
-            return []
-
+        # Google Shopping can only be SEARCHED -- it has no "list everything in
+        # category X" endpoint. So a category is not a filter here, it is a
+        # SEARCH TERM. Clicking "Laptops" searches for laptops.
+        #
+        # This is the bug that made every category chip appear dead: an empty
+        # query returned [] immediately, so clicking a chip rendered nothing and
+        # the UI looked frozen. The category was being passed and then discarded.
         term = query.strip()
         if category:
-            term = f"{term} {category.replace('-', ' ')}"
+            readable = category.replace("-", " ").strip()
+            term = f"{term} {readable}".strip() if term else readable
+
+        if not term:
+            # Still nothing to search. Returning [] is correct -- spending a
+            # credit on whatever Google feels like showing is not.
+            return []
 
         resp = http.get(
             SEARCH_URL,

@@ -393,8 +393,11 @@ function wireRecommendationButtons(root) {
         <span class="spinner"></span>finding related products…</div>`;
       panel.classList.add('open');
       try {
+        // `q` lets a search-driven source recommend from its own results. The
+        // search is already cached, so this costs no API quota.
         const d = await api('/recommendations?' + new URLSearchParams({
           title: btn.dataset.title, k: 6,
+          q: $('#q').value.trim() || state.category || '',
         }));
         panel.dataset.loaded = '1';
         panel.innerHTML = d.count ? `
