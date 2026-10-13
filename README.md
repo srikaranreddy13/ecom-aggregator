@@ -7,7 +7,7 @@ multi-criteria (TOPSIS) ranking and recommendations, served over an HTTP API wit
 a live web frontend.
 
 **Status:** aggregation, entity resolution, ranking, buy links and
-recommendations are complete and tested (**215 tests**). Price forecasting is not
+recommendations are complete and tested (**221 tests**). Price forecasting is not
 built yet, but its data infrastructure exists and works.
 
 Products come from a **live catalogue over HTTP with no API key** — 194 products
@@ -80,7 +80,7 @@ runs the demo and evaluations, builds the dashboard, opens it.
 Everything individually (set `EMBEDDER_BACKEND` first, see above):
 
 ```
-python -m pytest tests -q                        215 tests
+python -m pytest tests -q                        221 tests
 python -m scripts.backfill_prices --days 180     generate price history
 python -m scripts.serve                          API + frontend -> :8000
 python -m scripts.demo                           terminal walkthrough
@@ -684,7 +684,7 @@ scripts/analyse_normalisation.py the refined Result 2
 scripts/build_dashboard.py       static dashboard
 scripts/update_fx_rates.py       refresh the FX snapshot
 
-tests/                   215 tests across 10 files
+tests/                   221 tests across 10 files
 data/                    catalogue.json (offline fallback)  fx_rates.json
                          sample_listings.json (gold eval set)  aggregator.db
 Dockerfile  docker-compose.yml  .github/workflows/ci.yml  .env.example
