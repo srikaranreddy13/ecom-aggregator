@@ -23,6 +23,7 @@ logs/
 
 # Generated artefacts
 dashboard.html
+PROJECT_REPORT.docx
 
 # Editors / OS
 # .claude/settings.json is shared config and IS committed;
