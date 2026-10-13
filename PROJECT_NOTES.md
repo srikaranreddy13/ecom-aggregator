@@ -7,7 +7,7 @@ engineering around them was quietly broken in ways that would have wrecked the
 next phase — so we fixed the foundations, wrapped the system in a real API, and
 built the test suite that proves the fixes hold.
 
-**The numbers:** 11 tests → **221**. Price history: 30 rows over 2 days with zero
+**The numbers:** 11 tests → **226**. Price history: 30 rows over 2 days with zero
 price movement → **4,842 observations over 180 days** that actually move. Plus one
 of our published results turned out to be over-general, and we corrected it.
 
@@ -459,7 +459,7 @@ Ours reports the failures this project can actually *have*:
   can't run the transformer backend). Runs as a non-root user.
 - **docker-compose** — API + a backfill job + an optional daily collector. The
   database is a named volume, so `docker compose down` doesn't destroy history.
-- **GitHub Actions** — runs 221 tests on two Python versions, **asserts the
+- **GitHub Actions** — runs 226 tests on two Python versions, **asserts the
   synthetic history is not flat**, checks the evaluation scripts and dashboard
   still build, then boots the container and hits `/health`.
 

@@ -443,7 +443,7 @@ was what people actually looked at. There is now one.
 
 ---
 
-### [10] Testing — 221 automated tests
+### [10] Testing — 226 automated tests
 
 Worth explaining *how* they are written, not just how many:
 
@@ -530,7 +530,7 @@ whatever the user searched.
 
 | Quantity | Value |
 |---|---|
-| Automated tests | **221** |
+| Automated tests | **226** |
 | Listings → products (one real query) | **40 → 29** |
 | Largest product cluster | **10 competing offers** |
 | Observed price range, iPhone 15 128GB | **₹40,900 – ₹71,190** |

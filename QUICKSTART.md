@@ -58,7 +58,7 @@ re-run it if you open a new one. To make it permanent, copy `.env.example` to
 python -m pytest tests -q
 ```
 
-Expect **221 passed**. If you see 11, you are running an older copy.
+Expect **226 passed**. If you see 11, you are running an older copy.
 
 ### Step 4 — generate the price history
 
@@ -214,7 +214,7 @@ to PATH".
 Leftover rows from the old static-file collector.
 `python -m scripts.backfill_prices --purge-flat`
 
-**Tests show 11 passed instead of 221**
+**Tests show 11 passed instead of 226**
 You have an older copy of the project.
 
 ---
@@ -326,4 +326,4 @@ your price history. Use `down -v` only when you mean to.
 | `scripts/collect_prices.py` | Daily snapshot — schedule this |
 | `scripts/analyse_normalisation.py` | The refined Result 2 |
 | `scripts/update_fx_rates.py` | Refresh the FX snapshot |
-| `tests/` | 221 tests |
+| `tests/` | 226 tests |
