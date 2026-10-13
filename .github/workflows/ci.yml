@@ -64,11 +64,6 @@ jobs:
           python -m scripts.evaluate_matching
           python -m scripts.analyse_normalisation
 
-      - name: Verify the dashboard builds
-        run: |
-          python -m scripts.build_dashboard
-          test -s dashboard.html
-
   lint:
     runs-on: ubuntu-latest
     steps:

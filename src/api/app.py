@@ -1,10 +1,11 @@
 """
 HTTP API for the aggregator.
 
-Before this, the only way to see results was `scripts/build_dashboard.py`,
-which baked a snapshot into a static HTML file. That is fine for a screenshot
-and useless for anything else: a reviewer cannot type their own query, the
-sliders re-implement TOPSIS in JavaScript, and nothing can be integrated with.
+Results used to be viewable only through a build step that baked a snapshot
+into a static HTML file (since deleted). That is fine for a screenshot and
+useless for anything else: a reviewer cannot type their own query, the sliders
+re-implement TOPSIS in JavaScript -- a second implementation of the ranking
+that can disagree with this one -- and nothing can be integrated with.
 
     uvicorn src.api.app:app --reload
     python -m scripts.serve
