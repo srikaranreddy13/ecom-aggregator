@@ -80,23 +80,37 @@ python -m scripts.analyse_normalisation
 echo ----------------------------------------------------------------
 echo.
 
-REM ---- dashboard ----
-echo [7/7] Building dashboard...
-python -m scripts.build_dashboard
-if exist "dashboard.html" (
-  echo.
-  echo Opening dashboard.html in your browser...
-  start "" "dashboard.html"
-) else (
-  echo [ERROR] dashboard.html was not created.
-)
+REM ---- live app ----
+REM This used to build and open dashboard.html, a static snapshot that
+REM re-implemented TOPSIS in JavaScript. That meant two implementations of one
+REM algorithm which could disagree, and the JavaScript one was what anybody
+REM watching actually looked at. The server below serves the real pipeline, so
+REM every number on screen is the number the Python produced.
+echo [7/7] Starting the live app...
+echo.
+echo   Opening http://127.0.0.1:8000 in your browser shortly.
+echo   Leave this window open -- it IS the server.
+echo   Press Ctrl+C here to stop it.
+echo.
+echo ================================================================
+
+REM Open the browser a few seconds from now, in the background, so the server
+REM has time to bind the port. Without the delay the browser beats it and
+REM shows a connection error on the first load.
+REM
+REM ping, not timeout, for the delay: timeout aborts with "input redirection
+REM is not supported" whenever stdin is not a real console, which is exactly
+REM how this runs when launched by double-click from some shells.
+REM No nested quotes either -- an inner start "" would close the cmd /c string
+REM early and the rest would be parsed as separate arguments.
+start "" /b cmd /c "ping -n 6 127.0.0.1 >nul & start http://127.0.0.1:8000"
+
+REM Foreground on purpose: this window stays alive as the server, and closing
+REM it stops the server. Backgrounding it leaves an orphan holding port 8000,
+REM and the next run fails with an address-already-in-use error that looks
+REM nothing like its cause.
+python -m scripts.serve
 
 echo.
-echo ================================================================
-echo   Done.
-echo.
-echo   To start the live API instead of the static dashboard:
-echo       python -m scripts.serve
-echo   then open http://127.0.0.1:8000/docs
-echo ================================================================
+echo Server stopped.
 pause >nul
