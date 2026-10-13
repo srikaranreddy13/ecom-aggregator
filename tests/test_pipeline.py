@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.adapters.mock_adapter import MockAdapter
+from src.matching import attributes as attrs
 from src.matching.embedder import Embedder
 from src.matching.resolver import (
     EntityResolver,
@@ -30,6 +31,61 @@ def test_storage_variants():
 def test_colour_modifier_does_not_beat_base():
     """Regression: 'Onyx Black' and 'Black' must agree."""
     assert extract_colour("Galaxy S24 (Onyx Black, 256 GB)") == "black"
+
+
+def test_tier_separates_base_from_pro_and_pro_max():
+    """Named after the bug: the live query 'iphone 15 128gb' returned the 15,
+    the 15 Pro and the 15 Pro Max as ONE product, because they share the
+    variant token '15', state no storage to disagree on, and read as nearly
+    identical text. The cheapest 'offer' in that cluster was a 399-rupee phone
+    case, presented to the user as the best price for a flagship phone.
+    """
+    base = attrs.extract("Apple iPhone 15")
+    pro = attrs.extract("Apple iPhone 15 Pro")
+    pro_max = attrs.extract("Apple iPhone 15 Pro Max")
+
+    assert base.conflicts_with(pro)
+    assert pro.conflicts_with(pro_max)
+    assert base.conflicts_with(pro_max)
+
+    # ...while two spellings of the SAME phone still merge.
+    assert attrs.extract("iPhone 15").conflicts_with(base) is None
+
+
+def test_tier_word_needs_a_model_number_in_front():
+    """Every tier word has a common non-tier meaning, and reading one where
+    none was meant invents a specification -- which makes the veto split
+    products that are genuinely the same, the expensive direction of the error.
+
+    A tier therefore only counts when it qualifies a model number.
+    """
+    for title in (
+        "Philips Air Fryer HD9252",          # 'air' is the appliance
+        "Fujifilm Instax Mini LiPlay",       # 'mini' is the product line
+        "Sony 55 inch Ultra HD Smart TV",    # 'ultra' is the resolution
+        "Mens Formal Shirt Plus Size 42",    # 'plus' is the sizing
+    ):
+        assert attrs.tier_tokens(title) == frozenset(), title
+
+    assert attrs.tier_tokens("Samsung Galaxy S23 Ultra 5G") == {"ultra"}
+    assert attrs.tier_tokens("Apple iPhone 15 Pro Max") == {"pro", "max"}
+
+
+def test_absent_tier_is_evidence_unlike_every_other_attribute():
+    """The deliberate exception to the veto's null-tolerance rule.
+
+    A title that omits its storage is not thereby a different phone, so the
+    other checks stay silent on a missing value. 'iPhone 15' does not merely
+    fail to mention that it is a Pro -- it asserts that it is not one, and the
+    base model and the Pro are separate products at separate prices.
+    """
+    assert attrs.extract("Apple iPhone 15 Pro").tier == {"pro"}
+    assert attrs.extract("Apple iPhone 15").tier == frozenset()
+
+    # Storage: absence stays silent (the existing rule, asserted here so a
+    # change to tier handling cannot quietly generalise to the others).
+    assert attrs.extract("iPhone 15 128GB").conflicts_with(
+        attrs.extract("iPhone 15")) is None
     assert extract_colour("Galaxy S24 256 GB Black") == "black"
     assert extract_colour("iPhone Graphite") == "graphite"  # modifier alone survives
 

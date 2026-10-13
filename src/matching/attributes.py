@@ -259,6 +259,7 @@ class Attributes:
     # Short model designators: {'s10'}, {'6'}, {'c35'}. The most discriminative
     # tokens in electronics, and the ones `distinctive` throws away.
     variants: frozenset[str] = frozenset()
+    tier: frozenset[str] = frozenset()
 
     def conflicts_with(self, other: "Attributes") -> str | None:
         """Return the attribute that proves these are different products, or None.
@@ -297,6 +298,26 @@ class Attributes:
                 mine = ", ".join(sorted(self.variants)[:3])
                 theirs = ", ".join(sorted(other.variants)[:3])
                 return f"variant ({mine} vs {theirs})"
+
+        # DISAGREEING MODEL TIER -- the one rule where ABSENCE is evidence.
+        #
+        # Every check above stays silent when either side omits the attribute,
+        # because a title that does not state its storage is not thereby a
+        # different phone. Tier is genuinely different: "iPhone 15" does not
+        # merely fail to mention that it is a Pro, it asserts that it is not one.
+        # The base model and the Pro are separate products at separate prices,
+        # so an empty tier is the value "base", not a gap.
+        #
+        # Without this, the live query "iphone 15 128gb" collapsed the 15, the
+        # 15 Pro and the 15 Pro Max into ONE product -- they share the variant
+        # token "15", carry no storage to disagree on, and read as near-identical
+        # text -- and the cheapest "offer" in that cluster was a 399-rupee phone
+        # case titled "iPhone 15", shown to the user as the best price for a
+        # flagship phone.
+        if self.tier != other.tier:
+            mine = ", ".join(sorted(self.tier)) or "base"
+            theirs = ", ".join(sorted(other.tier)) or "base"
+            return f"tier ({mine} vs {theirs})"
 
         # DISJOINT PRODUCT NAMES.
         #
@@ -516,6 +537,44 @@ def _variant_core(token: str) -> str:
     return m.group(1) if m else token
 
 
+# Tier words: the suffix that separates a base model from its upmarket sibling.
+# Closed vocabulary, and cross-brand rather than per-category -- iPhone Pro/Plus,
+# Galaxy Ultra/FE, Pixel Pro, iPad Air/Mini all draw on the same handful.
+_TIER_WORDS = ("pro", "max", "plus", "mini", "air", "ultra", "lite", "se", "fe")
+
+_TIER_ALT = "|".join(_TIER_WORDS)
+
+# A tier word counts ONLY when it immediately follows a variant designator.
+#
+# WHY POSITION, NOT PRESENCE. Every one of these words has a common non-tier
+# meaning: an "Air Fryer", an "Instax Mini", a TV sold as "Ultra HD", a shirt in
+# "Plus" size. Matching them anywhere in the title would invent a specification
+# that is not there, and the veto would then split products that are genuinely
+# the same -- the expensive direction of this error, exactly as with the bare
+# unit "m" above. Requiring a model number in front ("15 Pro", "S23 Ultra")
+# keeps the phone cases and drops the frying pans, because a tier always
+# qualifies a model and a frying pan has no model number before "Air".
+_TIER_RE = re.compile(
+    rf"\b(?:[a-z]{{0,2}}\d{{1,4}}[a-z]{{0,2}}|[a-z]{{1,3}}\d{{1,4}})"
+    rf"\s+((?:{_TIER_ALT})(?:\s+(?:{_TIER_ALT}))*)\b",
+    re.I,
+)
+
+
+def tier_tokens(title: str) -> frozenset[str]:
+    """Model-tier suffixes, e.g. {'pro'} or {'pro', 'max'} or {'ultra'}.
+
+    Empty means the base model, and that is INFORMATION, not a missing value --
+    see Attributes.conflicts_with for why this one attribute treats absence as
+    evidence when every other treats it as silence.
+    """
+    text = _QUANTITY_RE.sub(" ", title.lower().replace("-", " "))
+    out: set[str] = set()
+    for m in _TIER_RE.finditer(text):
+        out.update(m.group(1).lower().split())
+    return frozenset(out)
+
+
 def variant_tokens(title: str, brand: str | None = None) -> frozenset[str]:
     """Short model designators, e.g. {'s10'} or {'6'} or {'c35'}.
 
@@ -553,6 +612,7 @@ def extract(title: str, brand: str | None = None) -> Attributes:
         size=extract_size(title),
         distinctive=distinctive_tokens(title, brand),
         variants=variant_tokens(title, brand),
+        tier=tier_tokens(title),
     )
 
 
