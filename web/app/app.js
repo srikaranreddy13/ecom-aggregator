@@ -201,6 +201,7 @@ function renderStats(data) {
     ${stat(nSources, 'sources')}
     ${stat(data.took_ms + 'ms', 'server time')}
   `;
+  animateStatTiles($('#statGrid'));
 
   const dedup = d.listings - data.count;
   const failures = Object.keys(d.failures || {}).length;
@@ -219,6 +220,29 @@ function renderStats(data) {
 }
 
 const stat = (n, k) => `<div class="stat"><div class="n">${esc(n)}</div><div class="k">${esc(k)}</div></div>`;
+
+/** Counts a `.stat .n` tile up from 0 to its rendered value. Scoped to PURE
+ *  integers only (no currency symbol, no "ms"/"d"/"★" suffix) -- those already
+ *  carry their own visual weight, and tweening "₹59,900" digit-by-digit would
+ *  flicker through nonsense intermediate amounts rather than read as motion. */
+function animateStatTiles(container) {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  $$('.stat .n', container).forEach(el => {
+    const target = el.textContent.trim();
+    if (!/^\d+$/.test(target)) return;
+    const end = parseInt(target, 10);
+    if (end === 0) return;
+    const start = performance.now();
+    const dur = Math.min(600, 150 + end * 4);
+    (function tick(now) {
+      const p = Math.min(1, (now - start) / dur);
+      const eased = 1 - (1 - p) * (1 - p);
+      el.textContent = Math.round(end * eased).toString();
+      if (p < 1) requestAnimationFrame(tick);
+      else el.textContent = target;
+    })(start);
+  });
+}
 const pstage = (num, lbl, val) =>
   `<div class="pstage"><span class="num">${esc(num)}</span>
      <span class="lbl">${esc(lbl)}</span><span class="val">${esc(val)}</span></div>`;
@@ -528,6 +552,7 @@ function renderResolve(data) {
     ${stat(r.backend, 'embedding backend')}
     ${stat(r.similarity_threshold, 'similarity threshold')}
   `;
+  animateStatTiles($('#resolveSummary'));
 
   // Group clusters by the block key their listings share. Blocking is Stage 1,
   // so showing the blocks first makes the two stages visibly distinct.

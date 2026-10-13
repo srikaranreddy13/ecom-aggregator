@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>E-Commerce Aggregator — live</title>
+<title>⚡ Aggregator — every price, live</title>
 <!--
   Live frontend. Every number on this page comes from the API at runtime.
 
@@ -24,10 +24,10 @@
 
 <header class="topbar">
   <div class="brand">
-    <span class="logo">◈</span>
+    <span class="logo">⚡</span>
     <div>
-      <h1>E-Commerce Aggregator</h1>
-      <p class="sub">Semantic entity resolution + multi-criteria ranking</p>
+      <h1>deal terminal</h1>
+      <p class="sub">one query → every seller → ranked by what YOU actually care about</p>
     </div>
   </div>
   <div class="status" id="statusChip" title="Loading system status…">
@@ -51,10 +51,12 @@
 <section class="view active" id="view-search">
 
   <div class="explainer">
-    <strong>What this shows.</strong> One query hits every marketplace, duplicate
-    listings collapse into single products, and the offers inside each product are
-    ranked by <em>your</em> priorities. Move a slider and the winner changes —
-    that is the whole argument: there is no single &ldquo;best&rdquo; offer.
+    <strong>Why this hits different.</strong> Every other shopping site shows you
+    <em>its</em> idea of the best deal. This one hits every marketplace at once,
+    collapses 40 near-duplicate listings into the products they actually are, and
+    ranks the offers by <em>your</em> priorities — not theirs. Drag a slider below
+    and watch the winner flip in real time. That flip is the whole point: there is
+    no single &ldquo;best&rdquo; price, only the best price <em>for you</em>.
   </div>
 
   <div class="searchbar">
@@ -71,8 +73,8 @@
   <div class="controls">
     <div class="panel weights">
       <div class="panel-head">
-        <h2>Your priorities</h2>
-        <span class="hint">weights are normalised, so only the ratio matters</span>
+        <h2>What matters to you</h2>
+        <span class="hint">only the ratio between sliders matters</span>
       </div>
 
       <div class="presets">
@@ -128,18 +130,18 @@
 <section class="view" id="view-resolve">
 
   <div class="explainer">
-    <strong>The hard part of this project.</strong> &ldquo;iPhone 15 128GB Blue&rdquo;
-    and &ldquo;iPhone 15 <em>256GB</em> Blue&rdquo; are about 97% similar as text
-    but are <em>different products</em>. Embeddings capture topic, not
-    specification — so hard attributes are enforced as <em>constraints</em>,
-    never learned.
+    <strong>The part everyone gets wrong.</strong> &ldquo;iPhone 15 128GB Blue&rdquo;
+    and &ldquo;iPhone 15 <em>256GB</em> Blue&rdquo; read as ~97% the same text —
+    but they are <em>different products</em>, full stop. Embeddings are great at
+    topic, terrible at specification. So hard attributes never get <em>learned</em>
+    here — they get enforced as <em>constraints</em> no similarity score can override.
     <br><br>
-    <strong>Stage 1 — blocking:</strong> attributes are extracted from each title
-    with rules. Listings whose <code>brand · storage · colour</code> disagree land
-    in different blocks and can <em>never</em> merge.
-    <strong>Stage 2 — semantic clustering:</strong> inside each block, titles are
-    embedded and clustered by cosine similarity. Model number and generation act
-    as extra must-not-link constraints.
+    <strong>Stage 1 — blocking:</strong> attributes are pulled from each title by
+    rule. Listings whose <code>brand · storage · colour</code> disagree land in
+    different blocks and can <em>never</em> merge, no matter how similar the text.
+    <strong>Stage 2 — semantic clustering:</strong> inside each surviving block,
+    titles are embedded and clustered by cosine similarity, with model number and
+    generation acting as extra must-not-link tripwires.
   </div>
 
   <div class="searchbar">

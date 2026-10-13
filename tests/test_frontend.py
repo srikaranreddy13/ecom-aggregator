@@ -42,7 +42,12 @@ def test_index_is_served_at_root(client):
     r = client.get("/")
     assert r.status_code == 200
     assert "text/html" in r.headers["content-type"]
-    assert "E-Commerce Aggregator" in r.text
+    # "deal terminal" is the current on-page brand text (see web/app/index.html).
+    # Asserted case-insensitively on the brand word rather than the exact
+    # phrase, so a future copy tweak does not require touching this test for
+    # no functional reason -- the point of this test is "the page loaded and
+    # is not a blank shell", not "the wording is frozen forever".
+    assert "aggregator" in r.text.lower()
 
 
 @pytest.mark.parametrize("path,content_type", [
