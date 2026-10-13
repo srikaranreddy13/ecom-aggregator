@@ -230,3 +230,44 @@ def test_search_exposes_conversion_provenance(pipe_factory):
     offer = results[0]["all_offers"][0]
     assert offer["original_currency"] == "USD"
     assert offer["original_price"] == 699.0
+
+
+# ------------------------------------------------- brand / category guessing
+
+
+def test_search_backfills_brand_and_category_when_the_adapter_omits_them(pipe_factory):
+    """REGRESSION. A search-driven source (SerpApi) returns a title and a
+    price, nothing structured -- every listing's `brand` is None and nothing
+    in `raw` carries a category. That left the recommender's affinity and
+    substitute signals permanently dark on live data. The pipeline must
+    backfill both from the canonical title (see matching/product_meta.py)
+    rather than passing the gap straight through to the API response."""
+    ad = StubAdapter("serpapi", [
+        _l("serpapi", "1", 70000.0, title="Apple iPhone 15 Pro (128GB) Black"),
+    ])
+    results = pipe_factory([ad]).search("iphone 15 pro")
+    assert results[0]["brand"] == "Apple"
+    assert results[0]["category"] == "smartphones"
+
+
+def test_search_leaves_brand_and_category_none_when_genuinely_unguessable(pipe_factory):
+    """The complementary case: an unclassifiable title must stay None, not
+    receive an invented value -- see product_meta's module docstring for why a
+    wrong guess is worse than no guess here."""
+    ad = StubAdapter("serpapi", [
+        _l("serpapi", "1", 500.0, title="Generic USB Cable 1 Metre"),
+    ])
+    results = pipe_factory([ad]).search("usb cable")
+    assert results[0]["brand"] is None
+    assert results[0]["category"] is None
+
+
+def test_search_never_overrides_an_adapter_supplied_brand(pipe_factory):
+    """A catalogue-backed adapter that already knows the brand must win over
+    the title-guessing fallback, not be second-guessed by it."""
+    ad = StubAdapter("shop", [
+        _l("shop", "1", 1000.0, title="Store-Brand Phone 128GB",
+           brand="HouseBrand"),
+    ])
+    results = pipe_factory([ad]).search("phone")
+    assert results[0]["brand"] == "HouseBrand"

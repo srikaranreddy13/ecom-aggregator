@@ -17,7 +17,7 @@ from src.links import (
     retailer_links,
     search_terms,
 )
-from src.recommender import Recommender
+from src.recommender import Recommender, from_search_results
 
 
 # ---------------------------------------------------------------- catalogue
@@ -295,3 +295,143 @@ def test_cooccurrence_outranks_rules_when_present():
 def test_recommend_for_titles_matches_case_insensitively(recommender):
     assert recommender.recommend_for_titles(["  phone x  "], k=3)
     assert recommender.recommend_for_titles(["no such product"], k=3) == []
+
+
+# ------------------------------------------- search-driven recommendations
+#
+# These cover the fix for the recommender being almost entirely dark on live
+# (SerpApi) data: every listing carried brand=None and category=None, which
+# left affinity (needs brand) and complement (needs category) permanently
+# empty, and left substitute bucketing everything under one placeholder
+# category that merely happened to work by accident for a single-product-type
+# query.
+
+
+def _search_result_row(cluster_id, title, category, price, brand=None,
+                       rating=4.0, currency="INR"):
+    """Shapes a dict the way pipeline.search() actually builds one -- see
+    src/pipeline.py's per-cluster result dict -- so these tests exercise the
+    real contract between the pipeline and from_search_results, not an
+    imagined one."""
+    return {
+        "cluster_id": cluster_id,
+        "product": title,
+        "brand": brand,
+        "category": category,
+        "currency": currency,
+        "image_url": None,
+        "specs": "",
+        "all_offers": [{"price": price, "seller_rating": rating}],
+    }
+
+
+def test_from_search_results_leaves_category_none_when_unknown():
+    """REGRESSION. An earlier version defaulted every product's category to
+    the literal string "search-result", so _substitutes "worked" only because
+    every item in one query shared that one placeholder -- not because they
+    were verified to be the same kind of product. A genuinely unknown category
+    must stay None, not a value that silently groups unrelated products."""
+    rec = from_search_results([_search_result_row("c1", "Mystery Item", None, 500.0)])
+    assert rec.products[0].category is None
+
+
+def test_from_search_results_populates_affinity_once_brand_is_known():
+    """A same-brand product in a DIFFERENT category -- so the substitute signal
+    (same category) cannot also claim it, and only affinity is left to explain
+    why it was recommended at all. This isolates the exact signal the fix
+    re-lights: affinity was dead on live data because brand was always None."""
+    rows = [
+        _search_result_row("a", "Samsung Galaxy S23", "smartphones", 40000.0, "Samsung"),
+        _search_result_row("b", "Samsung Galaxy Tab S9", "tablets", 40000.0, "Samsung"),
+        _search_result_row("c", "Apple iPhone 15", "smartphones", 42000.0, "Apple"),
+    ]
+    rec = from_search_results(rows)
+    recs = rec.recommend("a", k=10, min_score=0.0)
+    kinds = {r.product.product_id: r.kind for r in recs}
+    assert kinds.get("b") == "affinity"            # same brand, different category
+    assert kinds.get("c") == "substitute"          # same category, different brand
+
+
+def test_from_search_results_substitutes_require_a_real_shared_category():
+    """Two products that both guess to "smartphones" are substitutes; one that
+    guesses to a different real category must not be bucketed with them."""
+    rows = [
+        _search_result_row("a", "Samsung Galaxy S23", "smartphones", 40000.0),
+        _search_result_row("b", "Apple iPhone 15", "smartphones", 55000.0),
+        _search_result_row("c", "Lenovo ThinkPad Laptop", "laptops", 50000.0),
+    ]
+    rec = from_search_results(rows)
+    ids = {r.product.product_id for r in rec.recommend("a", k=10, min_score=0.0)}
+    assert "b" in ids
+    assert "c" not in ids
+
+
+def test_category_pair_complement_fallback_fires_for_search_driven_products(monkeypatch):
+    """The fallback this fix adds: a single live query's results are all one
+    product type (a phone search returns phones), so there is no bag inside
+    them to recommend as a complement. The fallback must reach into the
+    bundled catalogue instead -- stubbed here so the test needs no network --
+    and label what it returns as a catalogue suggestion, not a live quote."""
+    import src.recommender as recommender_module
+
+    catalogue_products = [
+        Product(product_id="cat-case", title="Universal Phone Case", brand=None,
+                category="mobile-accessories", reference_price=15.0,
+                rating=4.2, is_reference_price=True),
+        Product(product_id="cat-charger", title="Fast Charger 65W", brand=None,
+                category="mobile-accessories", reference_price=20.0,
+                rating=4.5, is_reference_price=True),
+    ]
+    monkeypatch.setattr(recommender_module, "get_catalogue",
+                        lambda: _StubCatalogue(catalogue_products))
+
+    rows = [_search_result_row("phone", "Samsung Galaxy S23 Ultra",
+                               "smartphones", 90000.0)]
+    rec = from_search_results(rows)
+    recs = rec.recommend("phone", k=10, min_score=0.0)
+
+    complements = [r for r in recs if r.kind == "complement"]
+    assert complements, "no complement suggestion was produced for a smartphone"
+    assert all(r.product.category == "mobile-accessories" for r in complements)
+    # The honest label: these were never priced by THIS search.
+    assert all(r.product.is_reference_price for r in complements)
+    assert all("catalogue suggestion" in r.reason for r in complements)
+
+
+def test_category_pair_complements_skip_the_cross_currency_price_filter(monkeypatch):
+    """The anchor's price is in the pipeline's base currency (INR); the bundled
+    catalogue's reference prices are USD. Comparing them by ratio without
+    conversion would be exactly the silent wrong-currency bug this project has
+    been bitten by before (src/money.py exists because of it). The fallback
+    therefore does not price-filter at all -- this asserts that it returns
+    results across a currency mismatch rather than silently dropping or
+    mis-filtering them."""
+    import src.recommender as recommender_module
+
+    usd_case = Product(product_id="cat-case", title="Universal Phone Case",
+                       brand=None, category="mobile-accessories",
+                       reference_price=9999.0, currency="USD", rating=4.0,
+                       is_reference_price=True)
+    monkeypatch.setattr(recommender_module, "get_catalogue",
+                        lambda: _StubCatalogue([usd_case]))
+
+    rows = [_search_result_row("phone", "Samsung Galaxy S23 Ultra",
+                               "smartphones", 90000.0, currency="INR")]
+    rec = from_search_results(rows)
+    recs = rec.recommend("phone", k=10, min_score=0.0)
+
+    ids = {r.product.product_id for r in recs if r.kind == "complement"}
+    assert "cat-case" in ids, (
+        "a cross-currency reference price was filtered as if it were "
+        "comparable to the anchor's live price -- it is not"
+    )
+
+
+class _StubCatalogue:
+    """Avoids a real network fetch in a unit test."""
+
+    def __init__(self, products):
+        self._products = products
+
+    def all_products(self):
+        return self._products

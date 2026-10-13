@@ -53,6 +53,51 @@ log = get_logger(__name__)
 DUMMYJSON_BASE = "https://dummyjson.com"
 FALLBACK_PATH = ROOT / "data" / "catalogue.json"
 
+# Complement rules by category pair. Category-level rather than per-product,
+# because a rule per product would need maintaining for every new product --
+# the same trap the attribute extractor avoids. "Buyers of a laptop also buy
+# a bag" holds for every laptop, present and future.
+#
+# MODULE-LEVEL ON PURPOSE, not a DummyJsonCatalogue class attribute as it was
+# originally. recommender.py needs this table for SEARCH-DRIVEN recommendations
+# too (see Recommender._category_pair_complements), and a live query's result
+# set is never a DummyJsonCatalogue -- it is whatever retailer search just
+# returned. Importing a class merely to read one of its attributes, when that
+# class also does a live HTTP fetch of 194 products on first use, is a trap
+# waiting for someone to instantiate it by accident. A module-level constant
+# has no such hazard.
+COMPLEMENT_CATEGORIES: dict[str, list[str]] = {
+    # NOT furniture. The rule "a laptop goes with a desk and chair" is sound
+    # in principle, but this catalogue's furniture is beds and sofas, so it
+    # surfaced "MacBook Pro -> Annibale Colombo Bed". A rule that is right in
+    # the abstract and wrong on the actual data is still wrong.
+    "laptops":              ["mobile-accessories", "womens-bags"],
+    "smartphones":          ["mobile-accessories", "mens-watches", "sunglasses"],
+    "tablets":              ["mobile-accessories", "womens-bags"],
+    "mobile-accessories":   ["smartphones", "tablets", "laptops"],
+    "mens-shirts":          ["mens-shoes", "mens-watches", "sunglasses"],
+    "mens-shoes":           ["mens-shirts", "sports-accessories", "mens-watches"],
+    "mens-watches":         ["mens-shirts", "sunglasses", "mens-shoes"],
+    "womens-dresses":       ["womens-shoes", "womens-bags", "womens-jewellery"],
+    "womens-shoes":         ["womens-dresses", "womens-bags", "womens-jewellery"],
+    "womens-bags":          ["womens-dresses", "womens-shoes", "sunglasses"],
+    "womens-jewellery":     ["womens-dresses", "womens-watches", "womens-bags"],
+    "womens-watches":       ["womens-jewellery", "womens-bags", "womens-dresses"],
+    "tops":                 ["womens-shoes", "womens-bags", "womens-jewellery"],
+    "beauty":               ["skin-care", "fragrances"],
+    "skin-care":            ["beauty", "fragrances"],
+    "fragrances":           ["beauty", "skin-care"],
+    "groceries":            ["kitchen-accessories", "home-decoration"],
+    "kitchen-accessories":  ["groceries", "home-decoration", "furniture"],
+    "home-decoration":      ["furniture", "kitchen-accessories"],
+    # kitchen-accessories removed: it produced "Sofa -> Lunch Box".
+    "furniture":            ["home-decoration"],
+    "sunglasses":           ["mens-watches", "womens-bags", "mens-shirts"],
+    "sports-accessories":   ["mens-shoes", "mens-shirts"],
+    "motorcycle":           ["vehicle", "sports-accessories"],
+    "vehicle":              ["motorcycle", "sunglasses"],
+}
+
 
 @dataclass
 class Product:
@@ -87,6 +132,14 @@ class Product:
             "image_url": self.image_url,
             "rating": self.rating,
             "tags": list(self.tags),
+            # Lets a consumer -- the recommendation panel, specifically --
+            # distinguish a price the system actually just observed from a
+            # retailer (False) from a demo-catalogue price that is not a live
+            # quote (True). Recommender._category_pair_complements sources
+            # suggestions from this catalogue precisely because a single live
+            # search cannot supply cross-category items, and that honesty has
+            # to survive into the API response, not stop at a code comment.
+            "is_reference_price": self.is_reference_price,
         }
 
 
@@ -149,41 +202,10 @@ class DummyJsonCatalogue(Catalogue):
     name = "dummyjson"
     is_live = True
 
-    # Complement rules by category pair. Category-level rather than per-product,
-    # because a rule per product would need maintaining for every new product --
-    # the same trap the attribute extractor avoids. "Buyers of a laptop also buy
-    # a bag" holds for every laptop, present and future.
-    COMPLEMENT_CATEGORIES = {
-        # NOT furniture. The rule "a laptop goes with a desk and chair" is sound
-        # in principle, but this catalogue's furniture is beds and sofas, so it
-        # surfaced "MacBook Pro -> Annibale Colombo Bed". A rule that is right in
-        # the abstract and wrong on the actual data is still wrong.
-        "laptops":              ["mobile-accessories", "womens-bags"],
-        "smartphones":          ["mobile-accessories", "mens-watches", "sunglasses"],
-        "tablets":              ["mobile-accessories", "womens-bags"],
-        "mobile-accessories":   ["smartphones", "tablets", "laptops"],
-        "mens-shirts":          ["mens-shoes", "mens-watches", "sunglasses"],
-        "mens-shoes":           ["mens-shirts", "sports-accessories", "mens-watches"],
-        "mens-watches":         ["mens-shirts", "sunglasses", "mens-shoes"],
-        "womens-dresses":       ["womens-shoes", "womens-bags", "womens-jewellery"],
-        "womens-shoes":         ["womens-dresses", "womens-bags", "womens-jewellery"],
-        "womens-bags":          ["womens-dresses", "womens-shoes", "sunglasses"],
-        "womens-jewellery":     ["womens-dresses", "womens-watches", "womens-bags"],
-        "womens-watches":       ["womens-jewellery", "womens-bags", "womens-dresses"],
-        "tops":                 ["womens-shoes", "womens-bags", "womens-jewellery"],
-        "beauty":               ["skin-care", "fragrances"],
-        "skin-care":            ["beauty", "fragrances"],
-        "fragrances":           ["beauty", "skin-care"],
-        "groceries":            ["kitchen-accessories", "home-decoration"],
-        "kitchen-accessories":  ["groceries", "home-decoration", "furniture"],
-        "home-decoration":      ["furniture", "kitchen-accessories"],
-        # kitchen-accessories removed: it produced "Sofa -> Lunch Box".
-        "furniture":            ["home-decoration"],
-        "sunglasses":           ["mens-watches", "womens-bags", "mens-shirts"],
-        "sports-accessories":   ["mens-shoes", "mens-shirts"],
-        "motorcycle":           ["vehicle", "sports-accessories"],
-        "vehicle":              ["motorcycle", "sunglasses"],
-    }
+    # Kept as a class attribute too, purely so existing code and tests that
+    # read DummyJsonCatalogue.COMPLEMENT_CATEGORIES keep working unchanged.
+    # The module-level constant above is the one source of truth.
+    COMPLEMENT_CATEGORIES = COMPLEMENT_CATEGORIES
 
     def __init__(self, timeout: int | None = None, page_size: int = 100):
         self.timeout = timeout or settings.http_timeout_seconds

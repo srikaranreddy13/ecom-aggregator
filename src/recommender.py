@@ -42,7 +42,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .catalogue import Product
+from .catalogue import COMPLEMENT_CATEGORIES, Product, get_catalogue
 from .logging_setup import get_logger
 
 log = get_logger(__name__)
@@ -57,6 +57,16 @@ WEIGHT_COOCCURRENCE = 1.20      # reserved: real behaviour outranks every rule
 MAX_COMPLEMENT_PRICE_RATIO = 1.5
 # Substitutes must be genuinely comparable, or the "alternatives" are useless.
 SUBSTITUTE_PRICE_BAND = (0.4, 2.5)
+
+# A complement sourced from the bundled catalogue, rather than seen priced in
+# this actual search, is scored slightly below an equivalent live one. It is
+# still a genuinely useful suggestion -- a phone case really does go with a
+# phone -- but it is a category-level idea, not a quote, and the score should
+# reflect that it is the weaker of the two kinds of "complement".
+CATALOGUE_COMPLEMENT_DAMPING = 0.8
+# At most this many catalogue suggestions per complementary category, so one
+# recommendation panel cannot fill up with eight variations of "phone case".
+MAX_CATALOGUE_COMPLEMENTS_PER_CATEGORY = 3
 
 
 @dataclass
@@ -106,6 +116,33 @@ class Recommender:
         return count / best if best else 0.0
 
     def _complements(self, anchor: Product) -> list[Recommendation]:
+        """Complement candidates, from whichever source can actually supply one.
+
+        Two sources, and they are not interchangeable:
+
+          anchor.complements   explicit links, built by catalogue._link_complements.
+                                Only ever populated when this Recommender was built
+                                from the full catalogue, because only there does a
+                                laptop sit in the same product list as a bag.
+
+          category-pair lookup Fallback for everything else -- in particular a
+                                Recommender built by from_search_results over one
+                                live query's results. Those results are, by
+                                construction, ONE product type (a phone search
+                                returns phones), so there is no bag inside them
+                                to recommend as a genuine complement. The fallback
+                                reaches into the bundled catalogue instead, and is
+                                scored and labelled as what it is: a category-level
+                                suggestion, not a product this search actually saw
+                                priced. See Product.is_reference_price.
+        """
+        if anchor.complements:
+            return self._explicit_complements(anchor)
+        if anchor.category:
+            return self._category_pair_complements(anchor)
+        return []
+
+    def _explicit_complements(self, anchor: Product) -> list[Recommendation]:
         out = []
         for pid in anchor.complements:
             candidate = self.by_id.get(pid)
@@ -122,6 +159,50 @@ class Recommender:
                 product=candidate,
                 score=WEIGHT_COMPLEMENT * quality,
                 reason=f"Frequently bought with {anchor.category or 'this'}",
+                kind="complement",
+            ))
+        return out
+
+    def _category_pair_complements(self, anchor: Product) -> list[Recommendation]:
+        """No price-ratio filter here, deliberately, unlike _explicit_complements.
+
+        The anchor is a live product (price in the pipeline's base currency,
+        e.g. INR); the bundled catalogue's reference prices are in USD. A ratio
+        between them without conversion would be exactly the silent
+        wrong-currency-comparison bug this project has been bitten by more than
+        once (see money.py). Converting currency for a soft, best-effort
+        suggestion is not worth the complexity it would add here, so the
+        filter is left out rather than built unsafely -- is_reference_price on
+        every result it returns is what tells the caller these are category
+        ideas, not priced, comparable offers.
+        """
+        wanted = COMPLEMENT_CATEGORIES.get(anchor.category or "", [])
+        if not wanted:
+            return []
+
+        try:
+            catalogue_products = get_catalogue().all_products()
+        except Exception as exc:  # noqa: BLE001 -- a recommendation must never
+            # crash a search result over the bundled catalogue being briefly
+            # unreachable; worse case is simply no complement suggestions.
+            log.warning("category-pair complement lookup skipped",
+                        extra={"error": str(exc)[:200]})
+            return []
+
+        readable = anchor.category.replace("-", " ")
+        out: list[Recommendation] = []
+        per_category: dict[str, int] = {}
+        for product in catalogue_products:
+            if product.category not in wanted:
+                continue
+            if per_category.get(product.category, 0) >= MAX_CATALOGUE_COMPLEMENTS_PER_CATEGORY:
+                continue
+            per_category[product.category] = per_category.get(product.category, 0) + 1
+            quality = (product.rating or 3.0) / 5.0
+            out.append(Recommendation(
+                product=product,
+                score=WEIGHT_COMPLEMENT * quality * CATALOGUE_COMPLEMENT_DAMPING,
+                reason=f"Often paired with {readable} (catalogue suggestion, not a live offer)",
                 kind="complement",
             ))
         return out
@@ -251,6 +332,15 @@ def from_search_results(results: list[dict]) -> Recommender:
     search-driven aggregator -- it can only suggest things it has really seen
     priced, and it costs no extra API quota because the search response is
     already cached.
+
+    `row["category"]` is left as None when the pipeline could not populate or
+    guess one (see matching.product_meta.guess_category), rather than defaulted
+    to a placeholder. An earlier version defaulted it to the literal string
+    "search-result" for every product, which made _substitutes "work" by
+    accident -- every product in one query shared the one placeholder category,
+    so the bucket was really just "everything else in this search", regardless
+    of whether it was actually the same kind of product. Leaving it None when
+    genuinely unknown means the substitute signal goes quiet instead of lying.
     """
     products = []
     for row in results:
@@ -260,7 +350,7 @@ def from_search_results(results: list[dict]) -> Recommender:
             product_id=row.get("cluster_id") or row.get("product", ""),
             title=row.get("product", ""),
             brand=row.get("brand"),
-            category=row.get("category") or "search-result",
+            category=row.get("category"),
             reference_price=float(cheapest or 0.0),
             currency=row.get("currency", "INR"),
             image_url=row.get("image_url"),

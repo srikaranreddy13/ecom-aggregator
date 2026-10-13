@@ -29,6 +29,7 @@ from .links import build_links
 from .logging_setup import get_logger
 from .matching import attributes
 from .matching.embedder import Embedder
+from .matching.product_meta import guess_brand, guess_category
 from .matching.resolver import EntityResolver, ProductCluster
 from .money import count_incomparable, normalise_listings
 from .ranking.mcdm import topsis
@@ -237,6 +238,16 @@ class AggregatorPipeline:
                 }
 
             first = c.listings[0]
+            # Catalogue-backed sources set brand/category on the Listing itself.
+            # A search-driven source (SerpApi) never does -- Google Shopping
+            # returns a title and a price, nothing structured -- so brand and
+            # category are guessed from the canonical title as a fallback. This
+            # is what re-lights the recommender's affinity (needs brand) and
+            # substitute (needs category) signals on live data; see
+            # src/matching/product_meta.py for why a guess returns None rather
+            # than something wrong when it is not confident.
+            brand = first.brand or guess_brand(c.canonical_title)
+            category = (first.raw or {}).get("category") or guess_category(c.canonical_title)
             results.append(
                 {
                     "cluster_id": c.cluster_id,
@@ -246,10 +257,10 @@ class AggregatorPipeline:
                     "currency": self.base_currency,
                     "image_url": next(
                         (l.image_url for l in c.listings if l.image_url), None),
-                    "brand": first.brand,
-                    "category": (first.raw or {}).get("category"),
+                    "brand": brand,
+                    "category": category,
                     "specs": attributes.extract(
-                        c.canonical_title, first.brand).summary(),
+                        c.canonical_title, brand).summary(),
                     "profiles": profile_winners,
                     "profiles_agree": len(
                         {p["source"] for p in profile_winners.values()}) == 1,
