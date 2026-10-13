@@ -6,6 +6,8 @@ shape, and so validation genuinely happens at the edge rather than failing
 somewhere inside TOPSIS.
 """
 
+import json
+
 import pytest
 
 pytest.importorskip("fastapi", reason="API extras not installed")
@@ -13,6 +15,7 @@ pytest.importorskip("fastapi", reason="API extras not installed")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from src.api.app import app  # noqa: E402
+from src.config import _is_secret_field  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -51,6 +54,43 @@ def test_config_redacts_secrets(client):
     body = client.get("/config").json()
     for key in ("ebay_client_id", "ebay_client_secret"):
         assert body[key] in (None, "***set***")
+
+
+def test_config_redacts_every_secret_looking_field(client):
+    """The previous test named two fields and so proved almost nothing.
+
+    It asserted that the two eBay fields were redacted -- the only two the
+    allowlist contained -- so it passed happily while serpapi_key, the single
+    credential the project actually uses, was served in full by this endpoint.
+    A test that enumerates the implementation cannot detect an omission in it.
+
+    This asserts the PROPERTY instead: nothing whose name looks like a secret
+    may leave the process with its value intact. A field added later is covered
+    without anyone remembering to extend a list.
+    """
+    body = client.get("/config").json()
+    leaked = [
+        name for name, value in body.items()
+        if _is_secret_field(name) and value not in (None, "***set***")
+    ]
+    assert not leaked, f"/config served these secret fields verbatim: {leaked}"
+
+
+def test_serpapi_key_is_never_served_verbatim(monkeypatch):
+    """Named after the bug: GET /config returned the live API key, HTTP 200.
+
+    Asserted against a value this test plants, so it never depends on a real
+    key being configured and can never print one in a failure message.
+    """
+    from dataclasses import replace
+    from src import config as config_module
+
+    planted = "planted-secret-value-0123456789"
+    patched = replace(config_module.settings, serpapi_key=planted)
+    monkeypatch.setattr(config_module, "settings", patched)
+
+    assert planted not in json.dumps(patched.describe())
+    assert patched.describe()["serpapi_key"] == "***set***"
 
 
 def test_openapi_schema_is_generated(client):

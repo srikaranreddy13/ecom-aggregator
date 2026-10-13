@@ -85,6 +85,33 @@ def _get_bool(name: str, default: bool) -> bool:
     return _get(name, "1" if default else "0").lower() in ("1", "true", "yes", "on")
 
 
+# --------------------------------------------------------------- redaction
+
+# Substrings that mark a config field as secret.
+_SECRET_MARKERS = ("key", "secret", "token", "password", "credential")
+
+# Secret fields whose names contain none of the markers above.
+_SECRET_FIELDS = frozenset({"ebay_client_id"})
+
+
+def _is_secret_field(name: str) -> bool:
+    """Whether describe() must redact this field, decided from its NAME.
+
+    DERIVED, NOT LISTED, AND THAT IS THE POINT. This started as a hardcoded set
+    naming the two eBay fields. When SerpApi replaced eBay as the live source,
+    nobody thought to add serpapi_key to it -- so the one credential the project
+    actually uses was dumped in full by GET /config and printed by the startup
+    log on every boot, in front of whoever was watching the screen.
+
+    An allowlist fails open: forget an entry and a secret leaks silently. Naming
+    fails closed: a field added later is redacted unless it is deliberately
+    named otherwise, and the worst case is a redacted non-secret -- visible,
+    harmless, and fixed in one line.
+    """
+    low = name.lower()
+    return low in _SECRET_FIELDS or any(m in low for m in _SECRET_MARKERS)
+
+
 # --------------------------------------------------------------- settings
 
 
@@ -183,12 +210,11 @@ class Settings:
         return [o.strip() for o in self.api_cors_origins.split(",") if o.strip()]
 
     def describe(self) -> dict[str, object]:
-        """Config dump for /health and startup logs. Secrets are redacted."""
-        secret_names = {"ebay_client_id", "ebay_client_secret"}
+        """Config dump for /config and startup logs. Secrets are redacted."""
         out: dict[str, object] = {}
         for f in fields(self):
             val = getattr(self, f.name)
-            if f.name in secret_names:
+            if _is_secret_field(f.name):
                 out[f.name] = "***set***" if val else None
             elif isinstance(val, Path):
                 out[f.name] = str(val)
