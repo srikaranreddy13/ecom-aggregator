@@ -437,6 +437,37 @@ class _StubCatalogue:
         return self._products
 
 
+def test_no_specs_sentinel_never_becomes_a_shared_tag():
+    """REGRESSION: a specific live product (a perfume with an undetectable
+    specification) showed zero recommendations despite 33 other products in
+    the same category-browse result set, because the only "signal" that
+    matched anything was two unrelated products both carrying the literal
+    string "no specs detected" as a tag -- a perfume and, in principle, a
+    t-shirt, a charger, anything else attribute extraction found nothing in.
+    That is noise, not affinity, and the reason text it would have produced
+    ("Similar: no specs detected") is nonsensical on its face.
+    """
+    from src.matching.attributes import Attributes
+
+    rows = [
+        _search_result_row("a", "Totally Unspecified Perfume", None, 500.0),
+        _search_result_row("b", "Totally Unspecified T-Shirt", None, 500.0),
+    ]
+    # Both rows' "specs" field is the literal sentinel, exactly as
+    # attributes.extract(...).summary() produces for an unparseable title.
+    for row in rows:
+        row["specs"] = Attributes.NO_SPECS_SENTINEL
+
+    rec = from_search_results(rows)
+    a = next(p for p in rec.products if p.product_id == "a")
+    b = next(p for p in rec.products if p.product_id == "b")
+    assert Attributes.NO_SPECS_SENTINEL not in a.tags
+    assert Attributes.NO_SPECS_SENTINEL not in b.tags
+    # With the sentinel excluded, nothing links an unrelated perfume and
+    # t-shirt -- correctly zero, not a disguised phantom match.
+    assert rec.recommend("a", k=10, min_score=0.0) == []
+
+
 def test_default_floor_does_not_discard_the_only_available_signal():
     """REGRESSION: live products with no guessed category (a camera, a generic
     accessory) showed "No related products found" even when a same-brand

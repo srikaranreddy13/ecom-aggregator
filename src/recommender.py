@@ -44,6 +44,7 @@ from dataclasses import dataclass
 
 from .catalogue import COMPLEMENT_CATEGORIES, Product, get_catalogue
 from .logging_setup import get_logger
+from .matching.attributes import Attributes
 
 log = get_logger(__name__)
 
@@ -368,7 +369,18 @@ def from_search_results(results: list[dict]) -> Recommender:
             currency=row.get("currency", "INR"),
             image_url=row.get("image_url"),
             rating=max((o.get("seller_rating") or 0) for o in offers) if offers else None,
-            tags=[t for t in (row.get("specs") or "").split(" · ") if t],
+            # Attributes.summary() returns NO_SPECS_SENTINEL, not "", when
+            # nothing was extracted -- so the naive split used to turn that
+            # ONE PLACEHOLDER PHRASE into a "tag" every spec-less product
+            # shared with every other spec-less product, regardless of what
+            # either of them actually was. _affinity's shared-tag check then
+            # scored a perfume against an unrelated t-shirt as "similar",
+            # with a reason string that would have read literally
+            # "Similar: no specs detected" had it ever scored high enough to
+            # surface. Filtered out by name here, not by retyping the phrase,
+            # so the two places can never drift apart again.
+            tags=[t for t in (row.get("specs") or "").split(" · ")
+                  if t and t != Attributes.NO_SPECS_SENTINEL],
             is_reference_price=False,
         ))
     return Recommender(products)

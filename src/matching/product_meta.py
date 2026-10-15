@@ -192,7 +192,10 @@ _CATEGORY_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
         "moisturizer", "moisturiser", "sunscreen", "face wash", "face serum",
         "cleanser", "skincare",
     )),
-    ("fragrances", ("perfume", "deodorant", "eau de parfum", "body spray", "cologne")),
+    ("fragrances", (
+        "perfume", "deodorant", "eau de parfum", "eau de toilette",
+        "eau de cologne", "body spray", "cologne", "fragrance",
+    )),
 )
 
 

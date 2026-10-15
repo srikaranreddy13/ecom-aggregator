@@ -358,8 +358,16 @@ class Attributes:
             "size": self.size,
         }
 
+    NO_SPECS_SENTINEL = "no specs detected"
+
     def summary(self) -> str:
-        """Short human-readable spec, e.g. '256gb · black · wh1000xm5'."""
+        """Short human-readable spec, e.g. '256gb · black · wh1000xm5'.
+
+        NO_SPECS_SENTINEL is a class attribute, not a module-private literal,
+        so a caller that reuses this string as DATA rather than display text
+        can detect and exclude it by name instead of retyping the exact
+        phrase -- see recommender.from_search_results for why that matters.
+        """
         bits = [f"{v:g}{u}" for u, v in sorted(self.quantities.items())]
         if self.size:
             bits.append(f"size {self.size}")
@@ -371,7 +379,7 @@ class Attributes:
             bits.append(self.model_number)
         if self.generation:
             bits.append(f"gen {self.generation}")
-        return " · ".join(bits) or "no specs detected"
+        return " · ".join(bits) or self.NO_SPECS_SENTINEL
 
 
 def extract_quantities(title: str) -> dict[str, float]:

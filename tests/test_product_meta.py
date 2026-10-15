@@ -91,6 +91,8 @@ def test_guess_brand_prefers_the_named_manufacturer_over_the_product_line():
     ("Philips Air Fryer HD9252", "kitchen-accessories"),
     ("Nescafe Coffee Powder 200g", "groceries"),
     ("Wooden Office Chair for Study Room", "furniture"),
+    ("Jean Paul Gaultier Le Beau Eau de Toilette", "fragrances"),
+    ("Denver Hamilton Eau de Cologne", "fragrances"),
 ])
 def test_guess_category_direct_match(title, expected):
     assert guess_category(title) == expected
