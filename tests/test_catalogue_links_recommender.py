@@ -435,3 +435,24 @@ class _StubCatalogue:
 
     def all_products(self):
         return self._products
+
+
+def test_default_floor_does_not_discard_the_only_available_signal():
+    """REGRESSION: live products with no guessed category (a camera, a generic
+    accessory) showed "No related products found" even when a same-brand
+    match genuinely existed in the same search's results, because the default
+    min_score floor (0.25) sat ABOVE the score a same-brand/no-shared-tag
+    affinity match can ever produce (0.35 * 0.6 = 0.21). Reproduces the exact
+    shape of the bug: no category on either side, so complement and substitute
+    are both structurally silent, and affinity is the only signal that could
+    possibly fire.
+    """
+    rows = [
+        _search_result_row("a", "Sony Cyber-shot DSC-H9", None, 8999.0, "Sony"),
+        _search_result_row("b", "Sony Cyber-shot DSC-W830", None, 7499.0, "Sony"),
+    ]
+    rec = from_search_results(rows)
+    recs = rec.recommend("a", k=6)          # the real API call path: default floor
+    assert recs, "the only available signal (same-brand affinity) was discarded"
+    assert recs[0].kind == "affinity"
+    assert recs[0].product.product_id == "b"

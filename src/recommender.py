@@ -253,12 +253,25 @@ class Recommender:
     # ---------------- blend ----------------
 
     def recommend(self, anchor_id: str, k: int = 6,
-                  min_score: float = 0.25) -> list[Recommendation]:
+                  min_score: float = 0.20) -> list[Recommendation]:
         """Top-k recommendations for one product.
 
         `min_score` is a floor, not a suggestion: it is better to return three
         good items than to pad to k with weak ones. The caller asked for relevant
         recommendations, and padding is what makes a recommender feel broken.
+
+        REGRESSION THIS FIXES. The floor used to be 0.25 -- but a same-brand
+        match with no shared tags, which is the ordinary case for a live
+        search result (tags come from a "specs" string that is frequently
+        empty), scores WEIGHT_AFFINITY * 0.6 = 0.21. That is below 0.25, so
+        the single most relevant thing the system could say about a product
+        with no guessed category -- "more from Sony", when nothing else can
+        fire at all -- was being silently discarded as if it were noise. The
+        user saw "No related products found" for products that very much had
+        a related product; the floor, not the signal, was broken. 0.20 is not
+        an arbitrary relaxation: it is the smallest value that admits
+        affinity's own documented floor case without admitting the near-zero
+        scores padding was meant to exclude.
         """
         anchor = self.by_id.get(anchor_id)
         if anchor is None:
