@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>⚡ Aggregator — every price, live</title>
+<title>1Shop — every price, live</title>
 <!--
   Live frontend. Every number on this page comes from the API at runtime.
 
@@ -17,16 +17,30 @@
 -->
 <link rel="stylesheet" href="style.css">
 <!-- Inline data-URI favicon. A separate .ico file would 404 on every page load
-     and put a spurious error in the console during a demo. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f3a63'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='%234c8dff'%3E%E2%97%88%3C/text%3E%3C/svg%3E">
+     and put a spurious error in the console during a demo. Updated to match
+     the "1Shop" brand mark and the dark/volt-pulse palette -- the previous
+     version was left over from before that redesign. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0810'/%3E%3Ctext x='16' y='24' font-family='Arial,sans-serif' font-size='21' font-weight='800' text-anchor='middle' fill='%23ff3ea0'%3E1%3C/text%3E%3C/svg%3E">
 </head>
 <body>
 
 <header class="topbar">
   <div class="brand">
-    <span class="logo">⚡</span>
+    <!-- The "1Shop" mark: a magnifying glass with the numeral 1 inside the
+         lens -- search once, get the one right answer across every
+         retailer. Inline SVG, not an emoji or an image file, so it stays
+         crisp at any size and needs no network request. -->
+    <span class="logo">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="2.2"/>
+        <line x1="14.8" y1="14.8" x2="20.3" y2="20.3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        <text x="10" y="10.6" font-family="-apple-system, 'Segoe UI', system-ui, sans-serif"
+              font-size="8.5" font-weight="800" text-anchor="middle"
+              dominant-baseline="central" fill="currentColor">1</text>
+      </svg>
+    </span>
     <div>
-      <h1>deal terminal</h1>
+      <h1>1Shop</h1>
       <p class="sub">one query → every seller → ranked by what YOU actually care about</p>
     </div>
   </div>
